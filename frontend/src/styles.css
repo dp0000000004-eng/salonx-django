@@ -1,0 +1,312 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * SalonX design system.
+ * Purple/violet primary, dark navy sidebar + hero, white cards, soft shadows.
+ * All colors are oklch semantic tokens. Never hardcode colors in components.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-surface: var(--surface);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --shadow-card: 0 1px 2px oklch(0.2 0.04 265 / 6%), 0 8px 24px oklch(0.2 0.04 265 / 6%);
+  --shadow-float: 0 10px 40px oklch(0.2 0.04 265 / 12%);
+}
+
+:root {
+  --radius: 0.75rem;
+  --background: oklch(0.995 0.001 265);
+  --foreground: oklch(0.19 0.02 265);
+  --surface: oklch(0.975 0.006 285);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.19 0.02 265);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.19 0.02 265);
+  --primary: oklch(0.53 0.24 286);
+  --primary-foreground: oklch(0.99 0.002 285);
+  --primary-soft: oklch(0.95 0.03 288);
+  --secondary: oklch(0.96 0.015 288);
+  --secondary-foreground: oklch(0.3 0.09 286);
+  --muted: oklch(0.966 0.007 285);
+  --muted-foreground: oklch(0.55 0.02 275);
+  --accent: oklch(0.95 0.03 288);
+  --accent-foreground: oklch(0.35 0.14 286);
+  --destructive: oklch(0.6 0.22 20);
+  --destructive-foreground: oklch(0.99 0.002 285);
+  --success: oklch(0.65 0.16 155);
+  --success-foreground: oklch(0.99 0.002 285);
+  --warning: oklch(0.79 0.16 72);
+  --warning-foreground: oklch(0.25 0.05 72);
+  --info: oklch(0.65 0.14 240);
+  --info-foreground: oklch(0.99 0.002 285);
+  --border: oklch(0.92 0.008 285);
+  --input: oklch(0.92 0.008 285);
+  --ring: oklch(0.53 0.24 286);
+  --chart-1: oklch(0.53 0.24 286);
+  --chart-2: oklch(0.65 0.16 155);
+  --chart-3: oklch(0.79 0.16 72);
+  --chart-4: oklch(0.6 0.22 20);
+  --chart-5: oklch(0.65 0.14 240);
+  --sidebar: oklch(0.17 0.03 275);
+  --sidebar-foreground: oklch(0.9 0.01 280);
+  --sidebar-primary: oklch(0.53 0.24 286);
+  --sidebar-primary-foreground: oklch(0.99 0.002 285);
+  --sidebar-accent: oklch(0.24 0.04 278);
+  --sidebar-accent-foreground: oklch(0.98 0.003 285);
+  --sidebar-border: oklch(0.26 0.03 278);
+  --sidebar-ring: oklch(0.53 0.24 286);
+}
+
+.dark {
+  --background: oklch(0.15 0.02 270);
+  --foreground: oklch(0.97 0.003 285);
+  --surface: oklch(0.19 0.025 272);
+  --card: oklch(0.21 0.026 272);
+  --card-foreground: oklch(0.97 0.003 285);
+  --popover: oklch(0.21 0.026 272);
+  --popover-foreground: oklch(0.97 0.003 285);
+  --primary: oklch(0.62 0.22 288);
+  --primary-foreground: oklch(0.99 0.002 285);
+  --primary-soft: oklch(0.3 0.07 288);
+  --secondary: oklch(0.27 0.03 275);
+  --secondary-foreground: oklch(0.97 0.003 285);
+  --muted: oklch(0.27 0.03 275);
+  --muted-foreground: oklch(0.72 0.02 280);
+  --accent: oklch(0.3 0.05 285);
+  --accent-foreground: oklch(0.97 0.003 285);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.62 0.22 288);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@utility salonx-card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+}
+
+/*
+ * Lightweight premium motion.
+ * Transform + opacity only, so it stays smooth on low-end Android devices.
+ */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+@keyframes salonx-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes salonx-hero-image {
+  from {
+    opacity: 0;
+    transform: scale(1.02);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes salonx-loader-fade {
+  0%,
+  100% {
+    opacity: 0.18;
+    transform: scale(0.985);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.salonx-loader-word {
+  animation: salonx-loader-fade 1.8s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .salonx-loader-word {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+
+
+/* One-shot entrance driven by IntersectionObserver (see components/salonx/Reveal.tsx). */
+.sx-reveal {
+  opacity: 0;
+  transform: translate3d(0, 12px, 0);
+  transition:
+    opacity 0.45s cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition-delay: var(--sx-delay, 0ms);
+}
+
+.sx-reveal[data-in="true"] {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+/* Entrance on first paint, for above-the-fold hero content. */
+.sx-enter {
+  animation: salonx-rise 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation-delay: var(--sx-delay, 0ms);
+}
+
+.sx-hero-image {
+  animation: salonx-hero-image 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* Subtle touch/press feedback. */
+.sx-tap {
+  transition:
+    transform 0.16s cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 0.16s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sx-tap:active {
+  transform: scale(0.97);
+}
+
+.sx-tap-soft:active {
+  transform: scale(0.985);
+}
+
+/* Image fade-in over a reserved box, so nothing shifts while loading. */
+.sx-img {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.sx-img[data-loaded="true"] {
+  opacity: 1;
+}
+
+@utility salonx-lift {
+  transition:
+    transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1),
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+@utility salonx-lift-hover {
+  transform: translate3d(0, -3px, 0);
+  box-shadow: 0 12px 28px -12px oklch(0.45 0.18 288 / 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sx-reveal,
+  .sx-reveal[data-in="true"] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .sx-enter,
+  .sx-hero-image {
+    animation: none !important;
+  }
+
+  .sx-img {
+    transition: none;
+    opacity: 1;
+  }
+
+  .sx-tap,
+  .salonx-lift {
+    transition: none;
+  }
+
+  .sx-tap:active,
+  .sx-tap-soft:active {
+    transform: none;
+    opacity: 0.85;
+  }
+}
+

@@ -1,0 +1,49 @@
+export type Dict = { [k: string]: string | Dict };
+
+export const en = {
+  nav: { home: "Home", salons: "Salons", services: "Services", wedding: "Wedding Packages", offers: "Offers", hairstyles: "Hairstyles", about: "About Us", contact: "Contact", login: "Login / Sign up", myBookings: "My Bookings", salonDashboard: "Salon Dashboard", adminConsole: "Admin Console", signOut: "Sign out", myAccount: "My account", language: "Language" },
+  home: { title1: "Find the Best Salons", title2: "Near You &", title3: "Book Online", search: "Search Anything", nearMe: "Near Me", searchCity: "Search City", searchPlaceholder: "Salon name, area, pincode, city, district or state", searchBtn: "Search", popular: "Popular", topRated: "Top Rated Salons", verified: "Trusted & Verified Salons", categories: "Service Categories", wedding: "Wedding Packages", editorsPicks: "Editor's Picks", viewAll: "View all" },
+  search: { title: "Salons", finding: "Finding salons…", available: "{n} salons available", search: "Search", placeholder: "City, area, PIN or name", nearMe: "Near Me", nearOn: "Near Me on — tap to turn off", locating: "Getting location…", locDenied: "Location permission is required for Near Me. Allow location in your browser, or search by city below.", stateDistrict: "State / District", state: "State (e.g. Odisha)", district: "District (e.g. Khordha)", city: "City", all: "All", noCities: "No cities listed yet.", kmAway: "{km} km away", noResults: "No salons match your search.", retry: "Retry", loadError: "Could not load salons." },
+  booking: { bookNow: "Book Now", unavailable: "Booking currently unavailable", unavailableMsg: "This salon is temporarily unavailable for online booking.", open: "Open now", closed: "Closed" },
+  subscription: { active: "Active", expired: "Expired", trial: "Trial", renew: "Renew Subscription", expiredTitle: "Your SalonX subscription has expired.", expiredMsg: "Your existing salon data is safe. Renew your subscription to continue using SalonX business features." },
+  payment: { paid: "Paid", pending: "Pending", failed: "Failed", refunded: "Refunded", cancelled: "Cancelled" },
+  contact: { phone: "Phone", email: "Email", address: "Address", instagram: "Instagram", facebook: "Facebook", whatsapp: "WhatsApp" },
+  support: { title: "Support Tickets", newTicket: "New Ticket", none: "No support tickets yet.", loading: "Loading tickets…", loadError: "Could not load your tickets.", subject: "Subject", describe: "Describe the issue", submit: "Submit Ticket", submitting: "Submitting…", created: "Ticket created.", needDetails: "Please add a subject and description.", allTickets: "All tickets", reply: "Write a reply…", send: "Send", you: "You", team: "SalonX Support", retry: "Retry",
+    status: { open: "Open", in_progress: "In Progress", waiting_user: "Waiting for You", resolved: "Resolved", closed: "Closed" },
+    cat: { subscription: "Subscription", renewal: "Renewal", payment: "Payment", booking: "Booking", account: "Account", technical: "Technical Issue", salon_profile: "Salon Profile", other: "Other" },
+    pri: { low: "Low", medium: "Medium", high: "High", urgent: "Urgent" } },
+  common: { loading: "Loading…", retry: "Retry", save: "Save", cancel: "Cancel", error: "Something went wrong." },
+  footer: { rights: "All rights reserved." },
+};
+
+export const hi: Dict = {
+  nav: { home: "होम", salons: "सैलून", services: "सेवाएँ", wedding: "वेडिंग पैकेज", offers: "ऑफ़र", hairstyles: "हेयरस्टाइल", about: "हमारे बारे में", contact: "संपर्क", login: "लॉगिन / साइन अप", myBookings: "मेरी बुकिंग", salonDashboard: "सैलून डैशबोर्ड", adminConsole: "एडमिन कंसोल", signOut: "साइन आउट", myAccount: "मेरा खाता", language: "भाषा" },
+  home: { title1: "सबसे अच्छे सैलून खोजें", title2: "अपने पास और", title3: "ऑनलाइन बुक करें", search: "कुछ भी खोजें", nearMe: "मेरे पास", searchCity: "शहर खोजें", searchPlaceholder: "सैलून का नाम, क्षेत्र, पिनकोड, शहर, ज़िला या राज्य", searchBtn: "खोजें", popular: "लोकप्रिय", topRated: "टॉप रेटेड सैलून", verified: "भरोसेमंद और सत्यापित सैलून", categories: "सेवा श्रेणियाँ", wedding: "वेडिंग पैकेज", editorsPicks: "संपादक की पसंद", viewAll: "सभी देखें" },
+  search: { title: "सैलून", finding: "सैलून खोजे जा रहे हैं…", available: "{n} सैलून उपलब्ध", search: "खोजें", placeholder: "शहर, क्षेत्र, पिन या नाम", nearMe: "मेरे पास", nearOn: "मेरे पास चालू — बंद करने के लिए टैप करें", locating: "लोकेशन ली जा रही है…", locDenied: "“मेरे पास” के लिए लोकेशन अनुमति ज़रूरी है। ब्राउज़र में लोकेशन चालू करें, या नीचे शहर से खोजें।", stateDistrict: "राज्य / ज़िला", state: "राज्य (जैसे ओडिशा)", district: "ज़िला (जैसे खोर्धा)", city: "शहर", all: "सभी", noCities: "अभी कोई शहर नहीं।", kmAway: "{km} किमी दूर", noResults: "आपकी खोज से कोई सैलून नहीं मिला।", retry: "फिर कोशिश करें", loadError: "सैलून लोड नहीं हो सके।" },
+  booking: { bookNow: "अभी बुक करें", unavailable: "बुकिंग उपलब्ध नहीं", unavailableMsg: "यह सैलून अभी ऑनलाइन बुकिंग के लिए उपलब्ध नहीं है।", open: "अभी खुला", closed: "बंद" },
+  subscription: { active: "सक्रिय", expired: "समाप्त", trial: "ट्रायल", renew: "सदस्यता नवीनीकृत करें", expiredTitle: "आपकी SalonX सदस्यता समाप्त हो गई है।", expiredMsg: "आपका सैलून डेटा सुरक्षित है। SalonX बिज़नेस सुविधाएँ जारी रखने के लिए सदस्यता नवीनीकृत करें।" },
+  payment: { paid: "भुगतान हुआ", pending: "लंबित", failed: "विफल", refunded: "वापस किया गया", cancelled: "रद्द" },
+  contact: { phone: "फ़ोन", email: "ईमेल", address: "पता", instagram: "इंस्टाग्राम", facebook: "फ़ेसबुक", whatsapp: "व्हाट्सऐप" },
+  support: { title: "सहायता टिकट", newTicket: "नया टिकट", none: "अभी कोई टिकट नहीं।", loading: "टिकट लोड हो रहे हैं…", loadError: "आपके टिकट लोड नहीं हो सके।", subject: "विषय", describe: "समस्या बताएँ", submit: "टिकट भेजें", submitting: "भेजा जा रहा है…", created: "टिकट बन गया।", needDetails: "कृपया विषय और विवरण लिखें।", allTickets: "सभी टिकट", reply: "जवाब लिखें…", send: "भेजें", you: "आप", team: "SalonX सहायता", retry: "फिर कोशिश करें",
+    status: { open: "खुला", in_progress: "प्रगति में", waiting_user: "आपके जवाब का इंतज़ार", resolved: "हल हुआ", closed: "बंद" },
+    cat: { subscription: "सदस्यता", renewal: "नवीनीकरण", payment: "भुगतान", booking: "बुकिंग", account: "खाता", technical: "तकनीकी समस्या", salon_profile: "सैलून प्रोफ़ाइल", other: "अन्य" },
+    pri: { low: "कम", medium: "मध्यम", high: "उच्च", urgent: "अति आवश्यक" } },
+  common: { loading: "लोड हो रहा है…", retry: "फिर कोशिश करें", save: "सेव करें", cancel: "रद्द करें", error: "कुछ गलत हो गया।" },
+  footer: { rights: "सर्वाधिकार सुरक्षित।" },
+};
+
+export const or: Dict = {
+  nav: { home: "ହୋମ", salons: "ସେଲୁନ", services: "ସେବା", wedding: "ବିବାହ ପ୍ୟାକେଜ", offers: "ଅଫର", hairstyles: "ହେୟାରଷ୍ଟାଇଲ", about: "ଆମ ବିଷୟରେ", contact: "ଯୋଗାଯୋଗ", login: "ଲଗଇନ / ସାଇନ ଅପ", myBookings: "ମୋ ବୁକିଂ", salonDashboard: "ସେଲୁନ ଡ୍ୟାସବୋର୍ଡ", adminConsole: "ଆଡମିନ କନସୋଲ", signOut: "ସାଇନ ଆଉଟ", myAccount: "ମୋ ଖାତା", language: "ଭାଷା" },
+  home: { title1: "ସର୍ବୋତ୍ତମ ସେଲୁନ ଖୋଜନ୍ତୁ", title2: "ଆପଣଙ୍କ ପାଖରେ ଏବଂ", title3: "ଅନଲାଇନ ବୁକ କରନ୍ତୁ", search: "ଯାହା ବି ଖୋଜନ୍ତୁ", nearMe: "ମୋ ପାଖରେ", searchCity: "ସହର ଖୋଜନ୍ତୁ", searchPlaceholder: "ସେଲୁନ ନାମ, ଅଞ୍ଚଳ, ପିନକୋଡ, ସହର, ଜିଲ୍ଲା କିମ୍ବା ରାଜ୍ୟ", searchBtn: "ଖୋଜନ୍ତୁ", popular: "ଲୋକପ୍ରିୟ", topRated: "ଶ୍ରେଷ୍ଠ ରେଟିଂ ସେଲୁନ", verified: "ବିଶ୍ୱସ୍ତ ଓ ଯାଞ୍ଚିତ ସେଲୁନ", categories: "ସେବା ବର୍ଗ", wedding: "ବିବାହ ପ୍ୟାକେଜ", editorsPicks: "ସମ୍ପାଦକଙ୍କ ପସନ୍ଦ", viewAll: "ସବୁ ଦେଖନ୍ତୁ" },
+  search: { title: "ସେଲୁନ", finding: "ସେଲୁନ ଖୋଜାଯାଉଛି…", available: "{n}ଟି ସେଲୁନ ଉପଲବ୍ଧ", search: "ଖୋଜନ୍ତୁ", placeholder: "ସହର, ଅଞ୍ଚଳ, ପିନ କିମ୍ବା ନାମ", nearMe: "ମୋ ପାଖରେ", nearOn: "ମୋ ପାଖରେ ଚାଲୁ — ବନ୍ଦ ପାଇଁ ଟ୍ୟାପ କରନ୍ତୁ", locating: "ଲୋକେସନ ନିଆଯାଉଛି…", locDenied: "“ମୋ ପାଖରେ” ପାଇଁ ଲୋକେସନ ଅନୁମତି ଆବଶ୍ୟକ। ବ୍ରାଉଜରରେ ଲୋକେସନ ଅନୁମତି ଦିଅନ୍ତୁ, କିମ୍ବା ତଳେ ସହର ଦ୍ୱାରା ଖୋଜନ୍ତୁ।", stateDistrict: "ରାଜ୍ୟ / ଜିଲ୍ଲା", state: "ରାଜ୍ୟ (ଯେପରି ଓଡ଼ିଶା)", district: "ଜିଲ୍ଲା (ଯେପରି ଖୋର୍ଦ୍ଧା)", city: "ସହର", all: "ସବୁ", noCities: "ଏପର୍ଯ୍ୟନ୍ତ କୌଣସି ସହର ନାହିଁ।", kmAway: "{km} କିମି ଦୂର", noResults: "ଆପଣଙ୍କ ଖୋଜ ସହ କୌଣସି ସେଲୁନ ମେଳ ଖାଉନାହିଁ।", retry: "ପୁଣି ଚେଷ୍ଟା କରନ୍ତୁ", loadError: "ସେଲୁନ ଲୋଡ ହୋଇପାରିଲା ନାହିଁ।" },
+  booking: { bookNow: "ବର୍ତ୍ତମାନ ବୁକ କରନ୍ତୁ", unavailable: "ବୁକିଂ ଉପଲବ୍ଧ ନାହିଁ", unavailableMsg: "ବୁକିଂ ଅସ୍ଥାୟୀ ଭାବେ ଉପଲବ୍ଧ ନାହିଁ। ଏହି ସେଲୁନର ସଦସ୍ୟତା ଶେଷ ହୋଇଯାଇଛି।", open: "ବର୍ତ୍ତମାନ ଖୋଲା", closed: "ବନ୍ଦ" },
+  subscription: { active: "ସକ୍ରିୟ", expired: "ସମାପ୍ତ", trial: "ଟ୍ରାଏଲ", renew: "ସଦସ୍ୟତା ନବୀକରଣ କରନ୍ତୁ", expiredTitle: "ଆପଣଙ୍କ SalonX ସଦସ୍ୟତା ସମାପ୍ତ ହୋଇଛି।", expiredMsg: "ଆପଣଙ୍କ ସେଲୁନ ତଥ୍ୟ ସୁରକ୍ଷିତ। SalonX ବ୍ୟବସାୟ ସୁବିଧା ଜାରି ରଖିବାକୁ ସଦସ୍ୟତା ନବୀକରଣ କରନ୍ତୁ।" },
+  payment: { paid: "ପେମେଣ୍ଟ ହୋଇଛି", pending: "ବାକି", failed: "ବିଫଳ", refunded: "ଫେରସ୍ତ", cancelled: "ବାତିଲ" },
+  contact: { phone: "ଫୋନ", email: "ଇମେଲ", address: "ଠିକଣା", instagram: "ଇନଷ୍ଟାଗ୍ରାମ", facebook: "ଫେସବୁକ", whatsapp: "ହ୍ୱାଟସଆପ" },
+  support: { title: "ସହାୟତା ଟିକେଟ", newTicket: "ନୂଆ ଟିକେଟ", none: "ଏପର୍ଯ୍ୟନ୍ତ କୌଣସି ଟିକେଟ ନାହିଁ।", loading: "ଟିକେଟ ଲୋଡ ହେଉଛି…", loadError: "ଆପଣଙ୍କ ଟିକେଟ ଲୋଡ ହୋଇପାରିଲା ନାହିଁ।", subject: "ବିଷୟ", describe: "ସମସ୍ୟା ବର୍ଣ୍ଣନା କରନ୍ତୁ", submit: "ଟିକେଟ ପଠାନ୍ତୁ", submitting: "ପଠାଯାଉଛି…", created: "ଟିକେଟ ତିଆରି ହେଲା।", needDetails: "ଦୟାକରି ବିଷୟ ଓ ବିବରଣୀ ଲେଖନ୍ତୁ।", allTickets: "ସବୁ ଟିକେଟ", reply: "ଉତ୍ତର ଲେଖନ୍ତୁ…", send: "ପଠାନ୍ତୁ", you: "ଆପଣ", team: "SalonX ସହାୟତା", retry: "ପୁଣି ଚେଷ୍ଟା କରନ୍ତୁ",
+    status: { open: "ଖୋଲା", in_progress: "ଚାଲୁଅଛି", waiting_user: "ଆପଣଙ୍କ ଉତ୍ତର ଅପେକ୍ଷାରେ", resolved: "ସମାଧାନ ହେଲା", closed: "ବନ୍ଦ" },
+    cat: { subscription: "ସଦସ୍ୟତା", renewal: "ନବୀକରଣ", payment: "ପେମେଣ୍ଟ", booking: "ବୁକିଂ", account: "ଖାତା", technical: "ବୈଷୟିକ ସମସ୍ୟା", salon_profile: "ସେଲୁନ ପ୍ରୋଫାଇଲ", other: "ଅନ୍ୟ" },
+    pri: { low: "କମ", medium: "ମଧ୍ୟମ", high: "ଉଚ୍ଚ", urgent: "ଜରୁରୀ" } },
+  common: { loading: "ଲୋଡ ହେଉଛି…", retry: "ପୁଣି ଚେଷ୍ଟା କରନ୍ତୁ", save: "ସେଭ କରନ୍ତୁ", cancel: "ବାତିଲ", error: "କିଛି ଭୁଲ ହେଲା।" },
+  footer: { rights: "ସର୍ବସ୍ୱତ୍ୱ ସଂରକ୍ଷିତ।" },
+};
