@@ -10,5 +10,21 @@ services:
       - "5432:5432"
     volumes:
       - salonx_postgres:/var/lib/postgresql/data
+  nominatim:
+    profiles: ["geocoder"]
+    image: mediagis/nominatim:5.3
+    restart: unless-stopped
+    environment:
+      PBF_URL: https://download.geofabrik.de/asia/india-latest.osm.pbf
+      REPLICATION_URL: https://download.geofabrik.de/asia/india-updates/
+      UPDATE_MODE: continuous
+      REVERSE_ONLY: "true"
+      THREADS: "${NOMINATIM_THREADS:-4}"
+    shm_size: 2gb
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - salonx_nominatim:/var/lib/postgresql/16/main
 volumes:
   salonx_postgres:
+  salonx_nominatim:

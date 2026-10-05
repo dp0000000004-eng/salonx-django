@@ -55,12 +55,13 @@ DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS=[x.strip() for x in os.getenv('CORS_ALLOWED_ORIGINS','http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080').split(',') if x.strip()]
 CORS_ALLOW_CREDENTIALS=False
 CSRF_TRUSTED_ORIGINS=CORS_ALLOWED_ORIGINS
+REVERSE_GEOCODER_URL = os.getenv('REVERSE_GEOCODER_URL', '').strip()
 REST_FRAMEWORK={
  'DEFAULT_AUTHENTICATION_CLASSES':('rest_framework_simplejwt.authentication.JWTAuthentication',),
  'DEFAULT_PERMISSION_CLASSES':('rest_framework.permissions.IsAuthenticated',),
  'DEFAULT_FILTER_BACKENDS':('django_filters.rest_framework.DjangoFilterBackend','rest_framework.filters.OrderingFilter','rest_framework.filters.SearchFilter'),
  'DEFAULT_THROTTLE_CLASSES':('rest_framework.throttling.AnonRateThrottle','rest_framework.throttling.UserRateThrottle'),
- 'DEFAULT_THROTTLE_RATES':{'anon':'60/min','user':'300/min'},
+ 'DEFAULT_THROTTLE_RATES':{'anon':'60/min','user':'300/min','login':'10/min', 'hundred':'100/min'},
  'DEFAULT_RENDERER_CLASSES':('rest_framework.renderers.JSONRenderer',),
 }
 SIMPLE_JWT={'ACCESS_TOKEN_LIFETIME':timedelta(minutes=15),'REFRESH_TOKEN_LIFETIME':timedelta(days=7),'ROTATE_REFRESH_TOKENS':True,'BLACKLIST_AFTER_ROTATION':True}

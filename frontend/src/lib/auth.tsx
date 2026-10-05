@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-type User = { id:string; email?:string; username?:string; full_name?:string; role?:string };
-type Session = { access_token:string; refresh_token?:string|null; user:User|null };
+type User = { id: string; email?: string; username?: string; full_name?: string; role?: string };
+type Session = { access_token: string; refresh_token?: string | null; user: User | null };
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 
@@ -44,18 +44,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
 
-  async function loadDetails(userId: string | undefined) {
+  async function loadDetails(userId: string | undefined, sessionRole?: string) {
     if (!userId) {
       setProfile(null);
       setRoles([]);
       return;
     }
     const [{ data: p }, { data: r }] = await Promise.all([
-      api.from("profiles").select("id, full_name, phone, avatar_url").eq("id", userId).maybeSingle(),
+      api
+        .from("profiles")
+        .select("id, full_name, phone, avatar_url")
+        .eq("id", userId)
+        .maybeSingle(),
       api.from("user_roles").select("role").eq("user_id", userId),
     ]);
     setProfile((p as Profile) ?? null);
-    setRoles(((r ?? []) as { role: AppRole }[]).map((x) => x.role));
+    const loadedRoles = ((r ?? []) as { role: AppRole }[]).map((x) => x.role);
+    if (
+      (sessionRole === "customer" ||
+        sessionRole === "salon_owner" ||
+        sessionRole === "super_admin") &&
+      !loadedRoles.includes(sessionRole)
+    ) {
+      loadedRoles.push(sessionRole);
+    }
+    setRoles(loadedRoles);
   }
 
   useEffect(() => {
@@ -66,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(next);
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
         setTimeout(() => {
-          void loadDetails(next?.user?.id);
+          void loadDetails(next?.user?.id, next?.user?.role);
           if (event !== "SIGNED_OUT") void queryClient.invalidateQueries();
         }, 0);
       }
@@ -75,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void api.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
       setSession(data.session);
-      await loadDetails(data.session?.user?.id);
+      await loadDetails(data.session?.user?.id, data.session?.user?.role);
       setLoading(false);
     });
 
@@ -98,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refresh: async () => {
         const { data } = await api.auth.getSession();
         setSession(data.session);
-        await loadDetails(data.session?.user?.id);
+        await loadDetails(data.session?.user?.id, data.session?.user?.role);
       },
       signOut: async () => {
         await queryClient.cancelQueries();

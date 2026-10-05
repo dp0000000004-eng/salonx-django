@@ -154,7 +154,7 @@ export type SubscriptionAction =
   | "suspend"
   | "reactivate";
 
-/** Super Admin only — enforced inside the database function. */
+/** Super Admin only — enforced by the Django RPC. */
 export async function manageSubscription(salonId: string, action: SubscriptionAction, days = 30, note?: string) {
   const { error } = await api.rpc("admin_manage_subscription", {
     _salon_id: salonId,

@@ -114,6 +114,8 @@ function SalonDetails({ salon }: { salon: SalonRow }) {
     area: salon.area ?? "",
     pin_code: salon.pin_code ?? "",
     address: salon.address ?? "",
+    latitude: salon.latitude?.toString() ?? "",
+    longitude: salon.longitude?.toString() ?? "",
     about: salon.about ?? "",
     image_url: salon.cover_image_url ?? salon.image_url,
     logo_url: salon.logo_url,
@@ -127,6 +129,8 @@ function SalonDetails({ salon }: { salon: SalonRow }) {
       area: salon.area ?? "",
       pin_code: salon.pin_code ?? "",
       address: salon.address ?? "",
+      latitude: salon.latitude?.toString() ?? "",
+      longitude: salon.longitude?.toString() ?? "",
       about: salon.about ?? "",
       image_url: salon.cover_image_url ?? salon.image_url,
       logo_url: salon.logo_url,
@@ -142,6 +146,24 @@ function SalonDetails({ salon }: { salon: SalonRow }) {
       toast.error("City is required");
       return;
     }
+    const latitude = form.latitude.trim();
+    const longitude = form.longitude.trim();
+    if (Boolean(latitude) !== Boolean(longitude)) {
+      toast.error("Enter both latitude and longitude to set your salon location.");
+      return;
+    }
+    if (
+      latitude &&
+      (!Number.isFinite(Number(latitude)) ||
+        Number(latitude) < -90 ||
+        Number(latitude) > 90 ||
+        !Number.isFinite(Number(longitude)) ||
+        Number(longitude) < -180 ||
+        Number(longitude) > 180)
+    ) {
+      toast.error("Enter valid map coordinates for your salon.");
+      return;
+    }
     setBusy(true);
     const { error } = await api
       .from("salons")
@@ -152,6 +174,8 @@ function SalonDetails({ salon }: { salon: SalonRow }) {
         area: form.area.trim() || null,
         pin_code: form.pin_code.trim() || null,
         address: form.address.trim() || null,
+        latitude: latitude ? Number(latitude) : null,
+        longitude: longitude ? Number(longitude) : null,
         about: form.about.trim() || null,
         image_url: form.image_url,
         cover_image_url: form.image_url,
@@ -188,7 +212,35 @@ function SalonDetails({ salon }: { salon: SalonRow }) {
         <Field label="Address">
           <input className={inputClass} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
         </Field>
+        <Field label="Latitude">
+          <input
+            className={inputClass}
+            type="number"
+            min={-90}
+            max={90}
+            step="any"
+            value={form.latitude}
+            onChange={(e) => setForm({ ...form, latitude: e.target.value })}
+            placeholder="e.g. 20.2961"
+          />
+        </Field>
+        <Field label="Longitude">
+          <input
+            className={inputClass}
+            type="number"
+            min={-180}
+            max={180}
+            step="any"
+            value={form.longitude}
+            onChange={(e) => setForm({ ...form, longitude: e.target.value })}
+            placeholder="e.g. 85.8245"
+          />
+        </Field>
       </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Add the salon’s map coordinates to appear in customer Near Me results. In Google Maps,
+        right-click the salon and copy the coordinates shown.
+      </p>
       <div className="mt-3">
         <Field label="About your salon">
           <textarea className={inputClass} rows={4} value={form.about} onChange={(e) => setForm({ ...form, about: e.target.value })} />

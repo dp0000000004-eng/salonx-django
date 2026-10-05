@@ -20,20 +20,19 @@ export function AdminGate({ children }: { children: ReactNode }) {
   const roleCheck = useQuery({
     queryKey: ["is_super_admin", user?.id],
     queryFn: async () => {
-      const { data, error } = await api
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user!.id)
-        .eq("role", "super_admin")
-        .maybeSingle();
+      const { data, error } = await api.rpc("has_role", { _role: "super_admin" });
       if (error) throw error;
-      return !!data;
+      return data === true;
     },
     enabled: !!user?.id,
   });
 
   if (authLoading || count.isPending || (user && roleCheck.isPending)) {
-    return <Center><Loader2 className="size-5 animate-spin text-primary" /></Center>;
+    return (
+      <Center>
+        <Loader2 className="size-5 animate-spin text-primary" />
+      </Center>
+    );
   }
 
   if (count.isError) {
@@ -41,13 +40,23 @@ export function AdminGate({ children }: { children: ReactNode }) {
       <Center>
         <Card title="Cannot reach the platform" icon={ShieldX}>
           <p className="text-xs text-muted-foreground">{(count.error as Error).message}</p>
-          <Btn className="mt-4 w-full" onClick={() => count.refetch()}>Retry</Btn>
+          <Btn className="mt-4 w-full" onClick={() => count.refetch()}>
+            Retry
+          </Btn>
         </Card>
       </Center>
     );
   }
 
-  if ((count.data ?? 0) === 0) return <SetupScreen onDone={() => { void count.refetch(); void roleCheck.refetch(); }} />;
+  if ((count.data ?? 0) === 0)
+    return (
+      <SetupScreen
+        onDone={() => {
+          void count.refetch();
+          void roleCheck.refetch();
+        }}
+      />
+    );
 
   if (!user) return <LoginScreen />;
 
@@ -57,10 +66,22 @@ export function AdminGate({ children }: { children: ReactNode }) {
 }
 
 function Center({ children }: { children: ReactNode }) {
-  return <div className="flex min-h-screen items-center justify-center bg-surface p-4">{children}</div>;
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-surface p-4">{children}</div>
+  );
 }
 
-function Card({ title, subtitle, icon: Icon, children }: { title: string; subtitle?: string; icon: React.ComponentType<{ className?: string }>; children: ReactNode }) {
+function Card({
+  title,
+  subtitle,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  children: ReactNode;
+}) {
   return (
     <div className="w-full max-w-md rounded-2xl border border-border bg-card p-7 shadow-sm">
       <span className="flex size-11 items-center justify-center rounded-xl bg-primary-soft text-primary">
@@ -103,11 +124,16 @@ function SetupScreen({ onDone }: { onDone: () => void }) {
         const { data, error } = await api.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin + "/master-dashboard", data: { full_name: fullName } },
+          options: {
+            emailRedirectTo: window.location.origin + "/master-dashboard",
+            data: { full_name: fullName },
+          },
         });
         if (error) throw error;
         if (!data.session) {
-          toast.success("Check your email to confirm the account, then return here to finish setup.");
+          toast.success(
+            "Check your email to confirm the account, then return here to finish setup.",
+          );
           return;
         }
         await api.from("profiles").update({ full_name: fullName }).eq("id", data.user!.id);
@@ -135,22 +161,49 @@ function SetupScreen({ onDone }: { onDone: () => void }) {
           {!user && (
             <>
               <Field label="Full Name">
-                <input className={inputClass} value={fullName} onChange={(e) => setFullName(e.target.value)} required maxLength={120} />
+                <input
+                  className={inputClass}
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                  maxLength={120}
+                />
               </Field>
               <Field label="Email">
-                <input className={inputClass} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <input
+                  className={inputClass}
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
               </Field>
               <Field label="Password">
-                <input className={inputClass} type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+                <input
+                  className={inputClass}
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={8}
+                />
               </Field>
               <Field label="Confirm Password">
-                <input className={inputClass} type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} />
+                <input
+                  className={inputClass}
+                  type="password"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  required
+                  minLength={8}
+                />
               </Field>
             </>
           )}
           {user && (
             <p className="text-xs text-muted-foreground">
-              You are signed in as <span className="font-medium text-foreground">{user.email}</span>. Claim Super Admin access for this account.
+              You are signed in as <span className="font-medium text-foreground">{user.email}</span>
+              . Claim Super Admin access for this account.
             </p>
           )}
           <Btn type="submit" disabled={busy} className="w-full py-2.5">
@@ -185,13 +238,29 @@ function LoginScreen() {
 
   return (
     <Center>
-      <Card title="Super Admin Login" subtitle="Restricted area. Only the registered Super Admin can continue." icon={Lock}>
+      <Card
+        title="Super Admin Login"
+        subtitle="Restricted area. Only the registered Super Admin can continue."
+        icon={Lock}
+      >
         <form className="space-y-4" onSubmit={submit}>
           <Field label="Email">
-            <input className={inputClass} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <input
+              className={inputClass}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
           </Field>
           <Field label="Password">
-            <input className={inputClass} type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <input
+              className={inputClass}
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
           </Field>
           <Btn type="submit" disabled={busy} className="w-full py-2.5">
             {busy && <Loader2 className="size-4 animate-spin" />} Sign In
@@ -208,7 +277,8 @@ function DeniedScreen() {
     <Center>
       <Card title="Access denied" subtitle="Super Admin access is restricted." icon={ShieldX}>
         <p className="text-xs text-muted-foreground">
-          This account does not have Super Admin permissions. Sign in with the registered Super Admin account to continue.
+          This account does not have Super Admin permissions. Sign in with the registered Super
+          Admin account to continue.
         </p>
         <Btn variant="ghost" className="mt-5 w-full py-2.5" onClick={() => void signOut()}>
           Sign out

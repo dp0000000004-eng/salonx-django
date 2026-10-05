@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, Upload, X } from "lucide-react";
+import { CheckCircle2, Loader2, MapPin, Upload, X } from "lucide-react";
 import { PageShell } from "@/components/salonx/PageShell";
 import { api } from "@/lib/api-client";
 import { submitDemoRequest } from "@/lib/demo.functions";
@@ -112,6 +112,7 @@ function BookDemoPage() {
   const [cover, setCover] = useState<File | null>(null);
   const [images, setImages] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [done, setDone] = useState(false);
   const states = useStates();
   const districts = useDistricts(form.state);
@@ -119,6 +120,66 @@ function BookDemoPage() {
   function set<K extends keyof Form>(key: K) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setForm((f) => ({ ...f, [key]: e.target.value }));
+  }
+
+  function useCurrentLocation() {
+    if (!navigator.geolocation) {
+      toast.error("Location is not available in this browser.");
+      return;
+    }
+
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        const latitude = coords.latitude.toFixed(7);
+        const longitude = coords.longitude.toFixed(7);
+        const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+        const { data, error } = await api.reverseGeocode(coords.latitude, coords.longitude);
+        setForm((f) => ({
+          ...f,
+          latitude,
+          longitude,
+          mapsUrl,
+          address: data ? data.address : f.address,
+          area: data ? data.area : f.area,
+          pinCode: data ? data.pinCode : f.pinCode,
+          state: data ? data.state : f.state,
+          district: data ? data.district : f.district,
+        }));
+        setLocating(false);
+        if (error) {
+          toast.warning(
+            "Coordinates added, but address lookup is unavailable. Please check the address fields.",
+          );
+        } else if (data) {
+          const missing = [
+            !data.address && "full address",
+            !data.area && "area",
+            !data.pinCode && "pincode",
+            !data.district && "district",
+            !data.state && "state",
+          ].filter(Boolean);
+          toast.success(
+            missing.length
+              ? `Location found. Please fill or verify: ${missing.join(", ")}.`
+              : "Location and address details filled. Please verify they match your salon.",
+          );
+        }
+      },
+      (error) => {
+        setLocating(false);
+        if (error.code === error.PERMISSION_DENIED) {
+          toast.error(
+            "Location permission was denied. Allow access or enter coordinates manually.",
+          );
+        } else if (error.code === error.TIMEOUT) {
+          toast.error("Could not get your location in time. Please try again.");
+        } else {
+          toast.error("Could not get your location. Check your device location settings.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+    );
   }
 
   function validateStep(index: number): string | null {
@@ -156,12 +217,16 @@ function BookDemoPage() {
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
 
-  async function uploadMedia(salonId: string) {
+  async function uploadMedia(salonId: string): Promise<boolean> {
+    let failed = false;
     const put = async (file: File, folder: string) => {
       const ext = file.name.split(".").pop() ?? "jpg";
       const path = `${salonId}/${folder}/${crypto.randomUUID()}.${ext}`;
       const { error } = await api.storage.from("salon-media").upload(path, file, { upsert: true });
-      if (error) return null;
+      if (error) {
+        failed = true;
+        return null;
+      }
       return api.storage.from("salon-media").getPublicUrl(path).data.publicUrl;
     };
     const patch: {
@@ -188,7 +253,11 @@ function BookDemoPage() {
       }
     }
     if (!patch.image_url && patch.cover_image_url) patch.image_url = patch.cover_image_url;
-    if (Object.keys(patch).length) await api.from("salons").update(patch).eq("id", salonId);
+    if (Object.keys(patch).length) {
+      const { error } = await api.from("salons").update(patch).eq("id", salonId);
+      if (error) failed = true;
+    }
+    return failed;
   }
 
   async function finish() {
@@ -213,7 +282,7 @@ function BookDemoPage() {
           address: form.address,
           state: form.state,
           district: form.district,
-          city: form.district,
+          city: form.city || form.district,
           area: form.area || undefined,
           pinCode: form.pinCode,
           mapsUrl: form.mapsUrl || undefined,
@@ -237,7 +306,12 @@ function BookDemoPage() {
       });
       if (sessionError) throw sessionError;
       if (logo || cover || images.length) {
-        await uploadMedia(res.salonId);
+        const mediaFailed = await uploadMedia(res.salonId);
+        if (mediaFailed) {
+          toast.warning(
+            "Your salon was registered, but some images could not be uploaded. You can add them later from your dashboard.",
+          );
+        }
       }
       setDone(true);
     } catch (e) {
@@ -458,6 +532,24 @@ function BookDemoPage() {
                 onChange={set("mapsUrl")}
                 placeholder="Optional map link"
               />
+              <button
+                type="button"
+                onClick={useCurrentLocation}
+                disabled={locating}
+                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {locating ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <MapPin className="size-4" />
+                )}
+                {locating ? "Finding your address…" : "Use my current location"}
+              </button>
+              <p className="text-xs text-muted-foreground">
+                Uses your device coordinates to look up the address through SalonX&apos;s configured
+                self-hosted geocoder. Please use this while at your salon, then verify all returned
+                address details.
+              </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field
                   label="Latitude"

@@ -55,8 +55,6 @@ async function salonFields() {
   return data.session ? `${SALON_PUBLIC_FIELDS}, ${SALON_CONTACT_FIELDS}` : SALON_PUBLIC_FIELDS;
 }
 
-
-
 export type SalonFilters = {
   q?: string;
   city?: string;
@@ -136,17 +134,14 @@ export function salonsQuery(filters: SalonFilters = {}) {
     queryKey: ["salons", filters],
     queryFn: async () => {
       const fields = await salonFields();
-      let query = api
-        .from("salons")
-        .select(fields, { count: "exact" })
-        .eq("status", "approved");
+      let query = api.from("salons").select(fields, { count: "exact" }).eq("status", "approved");
 
       // Near Me: real coordinates, nearest first (server-side distance).
       let nearOrder: Map<string, number> | null = null;
       if (near) {
-        const { data: nearby, error: nearErr } = await api.rpc("salons_nearby" as never, { _lat: near.lat, _lng: near.lng, _limit: 200 } as never);
+        const { data: nearby, error: nearErr } = await api.nearbySalons(near.lat, near.lng);
         if (nearErr) throw nearErr;
-        const list = (nearby ?? []) as unknown as { salon_id: string; distance_km: number }[];
+        const list = nearby ?? [];
         if (list.length === 0) return { rows: [] as SalonRow[], count: 0 };
         nearOrder = new Map(list.map((r) => [r.salon_id, r.distance_km]));
         query = query.in("id", [...nearOrder.keys()]);
@@ -278,7 +273,10 @@ export function useCategorySalonCounts() {
         set.add(row.salon_id);
         map.set(row.category_id, set);
       }
-      return Object.fromEntries([...map.entries()].map(([k, v]) => [k, v.size])) as Record<string, number>;
+      return Object.fromEntries([...map.entries()].map(([k, v]) => [k, v.size])) as Record<
+        string,
+        number
+      >;
     },
   });
 }
@@ -335,7 +333,9 @@ export function useHairstyleCatalog(featuredOnly = false) {
     queryFn: async () => {
       let query = api
         .from("hairstyle_catalog")
-        .select("id, name, slug, description, image_url, category, gender, is_featured, sort_order, category_id")
+        .select(
+          "id, name, slug, description, image_url, category, gender, is_featured, sort_order, category_id",
+        )
         .eq("is_active", true);
       if (featuredOnly) query = query.eq("is_featured", true);
       const { data, error } = await query.order("sort_order");
@@ -357,16 +357,26 @@ export function useHairstyleStats() {
         .eq("salons.status", "approved");
       if (error) throw error;
       const map = new Map<string, { salons: Set<string>; min: number }>();
-      for (const row of (data ?? []) as { catalog_id: string | null; price: number; salon_id: string }[]) {
+      for (const row of (data ?? []) as {
+        catalog_id: string | null;
+        price: number;
+        salon_id: string;
+      }[]) {
         if (!row.catalog_id) continue;
-        const entry = map.get(row.catalog_id) ?? { salons: new Set<string>(), min: Number.POSITIVE_INFINITY };
+        const entry = map.get(row.catalog_id) ?? {
+          salons: new Set<string>(),
+          min: Number.POSITIVE_INFINITY,
+        };
         entry.salons.add(row.salon_id);
         entry.min = Math.min(entry.min, Number(row.price));
         map.set(row.catalog_id, entry);
       }
       const out: Record<string, { salons: number; from: number | null }> = {};
       for (const [key, value] of map) {
-        out[key] = { salons: value.salons.size, from: Number.isFinite(value.min) ? value.min : null };
+        out[key] = {
+          salons: value.salons.size,
+          from: Number.isFinite(value.min) ? value.min : null,
+        };
       }
       return out;
     },
@@ -379,7 +389,9 @@ export function useSalonServices(salonId?: string) {
     queryFn: async () => {
       const { data, error } = await api
         .from("services")
-        .select("id, name, description, image_url, category, price, duration_min, is_active, is_bookable")
+        .select(
+          "id, name, description, image_url, category, price, duration_min, is_active, is_bookable",
+        )
         .eq("salon_id", salonId!)
         .eq("is_active", true)
         .order("price");
@@ -396,7 +408,9 @@ export function useSalonHairstyles(salonId?: string) {
     queryFn: async () => {
       const { data, error } = await api
         .from("hairstyles")
-        .select("id, name, description, price, duration_min, image_url, category, gender, catalog_id, is_bookable")
+        .select(
+          "id, name, description, price, duration_min, image_url, category, gender, catalog_id, is_bookable",
+        )
         .eq("salon_id", salonId!)
         .eq("is_active", true)
         .order("price");
@@ -483,7 +497,9 @@ export function useOffers() {
     queryFn: async () => {
       const { data, error } = await api
         .from("coupons")
-        .select("id, code, description, discount_type, discount_value, min_amount, max_discount, expires_at, banner_url, salon_id, is_featured")
+        .select(
+          "id, code, description, discount_type, discount_value, min_amount, max_discount, expires_at, banner_url, salon_id, is_featured",
+        )
         .eq("is_active", true)
         .order("is_featured", { ascending: false })
         .order("discount_value", { ascending: false });
@@ -504,7 +520,10 @@ export function usePlatformServices() {
         .eq("is_active", true)
         .eq("salons.status", "approved");
       if (error) throw error;
-      const map = new Map<string, { name: string; category: string; from: number; salons: Set<string>; duration: number }>();
+      const map = new Map<
+        string,
+        { name: string; category: string; from: number; salons: Set<string>; duration: number }
+      >();
       for (const row of (data ?? []) as {
         name: string;
         category: string;
@@ -513,15 +532,25 @@ export function usePlatformServices() {
         salon_id: string;
       }[]) {
         const key = row.name.trim().toLowerCase();
-        const entry =
-          map.get(key) ??
-          { name: row.name, category: row.category, from: Number(row.price), salons: new Set<string>(), duration: row.duration_min };
+        const entry = map.get(key) ?? {
+          name: row.name,
+          category: row.category,
+          from: Number(row.price),
+          salons: new Set<string>(),
+          duration: row.duration_min,
+        };
         entry.from = Math.min(entry.from, Number(row.price));
         entry.salons.add(row.salon_id);
         map.set(key, entry);
       }
       return [...map.values()]
-        .map((v) => ({ name: v.name, category: v.category, from: v.from, duration: v.duration, salons: v.salons.size }))
+        .map((v) => ({
+          name: v.name,
+          category: v.category,
+          from: v.from,
+          duration: v.duration,
+          salons: v.salons.size,
+        }))
         .sort((a, b) => b.salons - a.salons);
     },
   });
@@ -593,7 +622,9 @@ export function useMyFavorites(userId?: string) {
       if (ids.length === 0) return [];
       const { data: salons, error: salonError } = await api
         .from("salons")
-        .select("id, name, slug, city, area, rating, review_count, starting_price, image_url, status")
+        .select(
+          "id, name, slug, city, area, rating, review_count, starting_price, image_url, status",
+        )
         .in("id", ids);
       if (salonError) throw salonError;
       return ids.map((id) => ({
@@ -744,7 +775,9 @@ export function useCatalogHairstyle(slug: string) {
     queryFn: async () => {
       const { data, error } = await api
         .from("hairstyle_catalog")
-        .select("id, name, slug, description, image_url, category, gender, is_featured, sort_order, category_id")
+        .select(
+          "id, name, slug, description, image_url, category, gender, is_featured, sort_order, category_id",
+        )
         .eq("slug", slug)
         .eq("is_active", true)
         .maybeSingle();
@@ -825,7 +858,11 @@ export const TRENDING_MIN_SIGNALS = 25;
 
 export function hasEnoughTrendData(rows: TrendRow[] | undefined) {
   if (!rows || rows.length < 3) return false;
-  const total = rows.reduce((sum, r) => sum + Number(r.views) + Number(r.searches) + Number(r.saves) + Number(r.bookings) * 5, 0);
+  const total = rows.reduce(
+    (sum, r) =>
+      sum + Number(r.views) + Number(r.searches) + Number(r.saves) + Number(r.bookings) * 5,
+    0,
+  );
   return total >= TRENDING_MIN_SIGNALS;
 }
 
@@ -866,17 +903,25 @@ export async function logHairstyleSearch(term: string, city?: string) {
 }
 
 /** Live open/closed state derived from the salon's own hours and weekly closed day. */
-export function salonOpenState(salon: {
-  is_active?: boolean;
-  status?: string;
-  opening_time?: string | null;
-  closing_time?: string | null;
-  weekly_closed_day?: number | null;
-}, now = new Date()): "open" | "closed" | "unknown" {
+export function salonOpenState(
+  salon: {
+    is_active?: boolean;
+    status?: string;
+    opening_time?: string | null;
+    closing_time?: string | null;
+    weekly_closed_day?: number | null;
+  },
+  now = new Date(),
+): "open" | "closed" | "unknown" {
   if (salon.status && salon.status !== "approved") return "closed";
   if (salon.is_active === false) return "closed";
   if (!salon.opening_time || !salon.closing_time) return "unknown";
-  if (salon.weekly_closed_day !== null && salon.weekly_closed_day !== undefined && now.getDay() === salon.weekly_closed_day) return "closed";
+  if (
+    salon.weekly_closed_day !== null &&
+    salon.weekly_closed_day !== undefined &&
+    now.getDay() === salon.weekly_closed_day
+  )
+    return "closed";
   const toMin = (t: string) => {
     const [h, m] = t.split(":");
     return Number(h) * 60 + Number(m ?? 0);

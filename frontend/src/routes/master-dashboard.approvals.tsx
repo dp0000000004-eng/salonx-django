@@ -3,7 +3,21 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-import { Btn, DataState, Empty, Modal, Panel, StatusBadge, TableWrap, Td, Th, dateLabel, inputClass, inr, useModal } from "@/lib/admin/core";
+import {
+  Btn,
+  DataState,
+  Empty,
+  Modal,
+  Panel,
+  StatusBadge,
+  TableWrap,
+  Td,
+  Th,
+  dateLabel,
+  inputClass,
+  inr,
+  useModal,
+} from "@/lib/admin/core";
 import { setSalonStatus, useSalonApplications, type ApplicationRow } from "@/lib/admin/approvals";
 import { useRealtime } from "@/lib/realtime";
 
@@ -23,9 +37,16 @@ function ApprovalsPage() {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
 
-  useRealtime(["salons", "demo_requests"], [["salon_applications"], ["admin_salons"], ["admin_kpis"]]);
+  useRealtime(
+    ["salons", "demo_requests"],
+    [["salon_applications"], ["admin_salons"], ["admin_kpis"]],
+  );
 
-  async function act(row: ApplicationRow, status: "approved" | "rejected" | "suspended" | "pending", why?: string) {
+  async function act(
+    row: ApplicationRow,
+    status: "approved" | "rejected" | "suspended" | "pending",
+    why?: string,
+  ) {
     setBusy(true);
     try {
       await setSalonStatus(row.id, status, why);
@@ -35,6 +56,9 @@ function ApprovalsPage() {
       setReason("");
       void queryClient.invalidateQueries({ queryKey: ["salon_applications"] });
       void queryClient.invalidateQueries({ queryKey: ["admin_salons"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin_subscriptions"] });
+      void queryClient.invalidateQueries({ queryKey: ["salon_subscription", row.id] });
+      void queryClient.invalidateQueries({ queryKey: ["salon_subscription_states"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update the salon.");
     } finally {
@@ -50,7 +74,9 @@ function ApprovalsPage() {
             key={t}
             onClick={() => setTab(t)}
             className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-colors duration-200 ${
-              tab === t ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
+              tab === t
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
             {t}
@@ -60,7 +86,13 @@ function ApprovalsPage() {
 
       <DataState
         query={apps}
-        empty={<Empty title={`No ${tab} salon applications.`} description="New demo requests appear here automatically." icon={ShieldCheck} />}
+        empty={
+          <Empty
+            title={`No ${tab} salon applications.`}
+            description="New demo requests appear here automatically."
+            icon={ShieldCheck}
+          />
+        }
       >
         {(rows) => (
           <TableWrap>
@@ -88,22 +120,39 @@ function ApprovalsPage() {
                   <Td>{r.city}</Td>
                   <Td>{r.area ?? "—"}</Td>
                   <Td>{dateLabel(r.created_at)}</Td>
-                  <Td><StatusBadge status={r.status} /></Td>
-                  <Td>{r.is_active ? "active" : r.status === "suspended" ? "suspended" : "pending"}</Td>
+                  <Td>
+                    <StatusBadge status={r.status} />
+                  </Td>
+                  <Td>
+                    {r.is_active ? "active" : r.status === "suspended" ? "suspended" : "pending"}
+                  </Td>
                   <Td>
                     <div className="flex flex-wrap gap-1.5">
-                      <Btn variant="ghost" onClick={() => detail.open(r)}>View Details</Btn>
+                      <Btn variant="ghost" onClick={() => detail.open(r)}>
+                        View Details
+                      </Btn>
                       {r.status !== "approved" && (
                         <Btn
                           onClick={() => {
-                            if (confirm(`Approve "${r.name}"? It becomes publicly visible immediately.`)) void act(r, "approved");
+                            if (
+                              confirm(
+                                `Approve "${r.name}"? It becomes publicly visible immediately.`,
+                              )
+                            )
+                              void act(r, "approved");
                           }}
                         >
                           Approve
                         </Btn>
                       )}
                       {r.status !== "rejected" && (
-                        <Btn variant="ghost" onClick={() => { setRejecting(r); setReason(""); }}>
+                        <Btn
+                          variant="ghost"
+                          onClick={() => {
+                            setRejecting(r);
+                            setReason("");
+                          }}
+                        >
                           Reject
                         </Btn>
                       )}
@@ -111,7 +160,12 @@ function ApprovalsPage() {
                         <Btn
                           variant="ghost"
                           onClick={() => {
-                            if (confirm(`Suspend "${r.name}"? It will be hidden and cannot take bookings.`)) void act(r, "suspended");
+                            if (
+                              confirm(
+                                `Suspend "${r.name}"? It will be hidden and cannot take bookings.`,
+                              )
+                            )
+                              void act(r, "suspended");
                           }}
                         >
                           Suspend
@@ -143,7 +197,9 @@ function ApprovalsPage() {
             placeholder="Tell the owner what needs to change before resubmitting."
           />
           <div className="mt-4 flex justify-end gap-2">
-            <Btn variant="ghost" onClick={() => setRejecting(null)}>Cancel</Btn>
+            <Btn variant="ghost" onClick={() => setRejecting(null)}>
+              Cancel
+            </Btn>
             <Btn
               disabled={busy || !reason.trim()}
               onClick={() => void act(rejecting, "rejected", reason.trim())}
@@ -168,8 +224,16 @@ function Details({ row }: { row: ApplicationRow }) {
         <Item label="Chairs / Seats" value={row.seats} />
         <Item label="Years in Business" value={row.years_in_business} />
         <div className="col-span-full flex flex-wrap gap-2">
-          {row.logo_url && <img src={row.logo_url} alt="Salon logo" className="size-20 rounded-lg object-cover" />}
-          {row.cover_image_url && <img src={row.cover_image_url} alt="Salon cover" className="h-20 w-36 rounded-lg object-cover" />}
+          {row.logo_url && (
+            <img src={row.logo_url} alt="Salon logo" className="size-20 rounded-lg object-cover" />
+          )}
+          {row.cover_image_url && (
+            <img
+              src={row.cover_image_url}
+              alt="Salon cover"
+              className="h-20 w-36 rounded-lg object-cover"
+            />
+          )}
           {images.map((u) => (
             <img key={u} src={u} alt="Salon" className="size-20 rounded-lg object-cover" />
           ))}
@@ -197,7 +261,10 @@ function Details({ row }: { row: ApplicationRow }) {
       <Section title="Business">
         <Item label="Opening Time" value={row.opening_time} />
         <Item label="Closing Time" value={row.closing_time} />
-        <Item label="Weekly Closed Day" value={row.weekly_closed_day === null ? "Open all week" : DAYS[row.weekly_closed_day]} />
+        <Item
+          label="Weekly Closed Day"
+          value={row.weekly_closed_day === null ? "Open all week" : DAYS[row.weekly_closed_day]}
+        />
         <Item label="Services Offered" value={row.services_offered} />
         <Item label="Starting Price" value={row.starting_price ? inr(row.starting_price) : "—"} />
         <Item label="Instagram" value={row.instagram_url} />
@@ -207,12 +274,24 @@ function Details({ row }: { row: ApplicationRow }) {
 
       <Section title="Account">
         <Item label="Email" value={row.email ?? row.profiles?.email} />
-        <Item label="Account Created" value={row.profiles?.created_at ? dateLabel(row.profiles.created_at) : dateLabel(row.created_at)} />
-        <Item label="Account Status" value={row.is_active ? "active" : row.status === "suspended" ? "suspended" : "pending"} />
+        <Item
+          label="Account Created"
+          value={
+            row.profiles?.created_at
+              ? dateLabel(row.profiles.created_at)
+              : dateLabel(row.created_at)
+          }
+        />
+        <Item
+          label="Account Status"
+          value={row.is_active ? "active" : row.status === "suspended" ? "suspended" : "pending"}
+        />
         <Item label="Approval Status" value={row.status} />
         {row.rejection_reason && <Item label="Rejection Reason" value={row.rejection_reason} />}
       </Section>
-      <p className="text-[11px] text-muted-foreground">Passwords are stored securely by the authentication system and are never visible here.</p>
+      <p className="text-[11px] text-muted-foreground">
+        Passwords are stored securely by the authentication system and are never visible here.
+      </p>
     </div>
   );
 }
@@ -220,7 +299,9 @@ function Details({ row }: { row: ApplicationRow }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </h3>
       <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">{children}</div>
     </div>
   );
@@ -230,7 +311,9 @@ function Item({ label, value }: { label: string; value: string | number | null |
   return (
     <div>
       <p className="text-[11px] text-muted-foreground">{label}</p>
-      <p className="break-words text-sm text-foreground">{value === null || value === undefined || value === "" ? "—" : String(value)}</p>
+      <p className="break-words text-sm text-foreground">
+        {value === null || value === undefined || value === "" ? "—" : String(value)}
+      </p>
     </div>
   );
 }
