@@ -13,6 +13,7 @@ from .models import (
     ContactMessage,
     DemoRequest,
     Location,
+    LegacyRecord,
     Notification,
     Profile,
     Salon,
@@ -21,6 +22,7 @@ from .models import (
     Subscription,
     SubscriptionPlan,
     SubscriptionStatusHistory,
+    SupportTicket,
 )
 
 
@@ -230,6 +232,97 @@ class DemoRegistrationTests(TestCase):
         self.assertIn('password', response.json())
         self.assertEqual(User.objects.count(), 0)
         self.assertEqual(Salon.objects.count(), 0)
+
+
+class SubscriptionContactAdminTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.owner = User.objects.create_user(
+            username='contact-owner',
+            email='contact-owner@example.test',
+            password='StrongOwnerPass123!',
+        )
+        self.salon = Salon.objects.create(
+            owner=self.owner,
+            name='Contact Salon',
+            slug='contact-salon',
+            status='approved',
+            is_active=True,
+        )
+        self.client.force_authenticate(self.owner)
+
+    def test_subscription_contact_creates_a_valid_owner_support_ticket(self):
+        response = self.client.post(
+            '/api/subscriptions/contact-admin/',
+            {'salon_id':str(self.salon.id)},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201, response.json())
+        ticket = SupportTicket.objects.get()
+        self.assertEqual(ticket.user, self.owner)
+        self.assertEqual(ticket.salon, self.salon)
+        self.assertEqual(ticket.subject, 'Subscription help request')
+        self.assertIn('Category: renewal', ticket.description)
+        self.assertIn('Current status: not started', ticket.description)
+        self.assertEqual(ticket.priority, 'high')
+        self.assertEqual(response.json()['id'], str(ticket.id))
+
+    def test_subscription_contact_rejects_a_salon_the_user_does_not_own(self):
+        other_owner = User.objects.create_user(
+            username='other-contact-owner',
+            email='other-contact-owner@example.test',
+            password='StrongOwnerPass123!',
+        )
+        other_salon = Salon.objects.create(
+            owner=other_owner,
+            name='Other Salon',
+            slug='other-contact-salon',
+        )
+
+        response = self.client.post(
+            '/api/subscriptions/contact-admin/',
+            {'salon_id':str(other_salon.id)},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(SupportTicket.objects.count(), 0)
+
+    def test_subscription_contact_has_a_separate_bounded_throttle(self):
+        for _ in range(10):
+            response = self.client.post(
+                '/api/subscriptions/contact-admin/',
+                {'salon_id':str(self.salon.id)},
+                format='json',
+            )
+            self.assertEqual(response.status_code, 201, response.json())
+
+        response = self.client.post(
+            '/api/subscriptions/contact-admin/',
+            {'salon_id':str(self.salon.id)},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(SupportTicket.objects.count(), 10)
+
+    def test_subscription_contact_is_not_blocked_by_general_api_throttle(self):
+        cache.set(
+            f'throttle_user_{self.owner.pk}',
+            [timezone.now().timestamp()] * 300,
+            timeout=60,
+        )
+
+        response = self.client.post(
+            '/api/subscriptions/contact-admin/',
+            {'salon_id':str(self.salon.id)},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201, response.json())
+        self.assertEqual(SupportTicket.objects.count(), 1)
 
 
 class SubscriptionManagementTests(TestCase):
@@ -600,6 +693,76 @@ class LocationSeedTests(TestCase):
         self.assertTrue(Location.objects.filter(
             level='district', parent=state, name='Khordha',
         ).exists())
+
+
+class SalonCategoryResourceTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.owner = User.objects.create_user(
+            username='category-owner',
+            email='category-owner@example.test',
+            password='StrongOwnerPass123!',
+        )
+        self.salon = Salon.objects.create(
+            owner=self.owner,
+            name='Category Salon',
+            slug='category-salon',
+        )
+        self.category = 'category-id'
+        self.client.force_authenticate(self.owner)
+        self.payload = {
+            'salon_id':str(self.salon.id),
+            'category_id':self.category,
+        }
+
+    def test_category_post_is_idempotent(self):
+        first = self.client.post('/api/db/salon_categories/', self.payload, format='json')
+        second = self.client.post('/api/db/salon_categories/', self.payload, format='json')
+
+        self.assertEqual(first.status_code, 201, first.json())
+        self.assertEqual(second.status_code, 200, second.json())
+        self.assertEqual(LegacyRecord.objects.filter(resource='salon_categories').count(), 1)
+        self.assertEqual(first.json()['id'], second.json()['id'])
+
+    def test_category_delete_uses_salon_and_category_filters(self):
+        self.client.post('/api/db/salon_categories/', self.payload, format='json')
+
+        response = self.client.delete(
+            f"/api/db/salon_categories/?salon_id={self.salon.id}&category_id={self.category}",
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(LegacyRecord.objects.filter(resource='salon_categories').exists())
+
+    def test_owner_cannot_assign_categories_to_another_salon(self):
+        another_owner = User.objects.create_user(
+            username='another-category-owner',
+            email='another-category-owner@example.test',
+            password='StrongOwnerPass123!',
+        )
+        another_salon = Salon.objects.create(
+            owner=another_owner,
+            name='Another Salon',
+            slug='another-category-salon',
+        )
+        payload = {**self.payload, 'salon_id':str(another_salon.id)}
+
+        response = self.client.post('/api/db/salon_categories/', payload, format='json')
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(LegacyRecord.objects.filter(resource='salon_categories').count(), 0)
+
+    def test_category_resource_uses_a_dedicated_throttle_bucket(self):
+        cache.set(
+            f'throttle_user_{self.owner.pk}',
+            [timezone.now().timestamp()] * 300,
+            timeout=60,
+        )
+
+        response = self.client.post('/api/db/salon_categories/', self.payload, format='json')
+
+        self.assertEqual(response.status_code, 201, response.json())
 
 
 class ApiResourceTests(TestCase):

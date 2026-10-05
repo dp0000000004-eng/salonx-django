@@ -61,7 +61,7 @@ REST_FRAMEWORK={
  'DEFAULT_PERMISSION_CLASSES':('rest_framework.permissions.IsAuthenticated',),
  'DEFAULT_FILTER_BACKENDS':('django_filters.rest_framework.DjangoFilterBackend','rest_framework.filters.OrderingFilter','rest_framework.filters.SearchFilter'),
  'DEFAULT_THROTTLE_CLASSES':('rest_framework.throttling.AnonRateThrottle','rest_framework.throttling.UserRateThrottle'),
- 'DEFAULT_THROTTLE_RATES':{'anon':'60/min','user':'300/min','login':'10/min', 'hundred':'100/min'},
+ 'DEFAULT_THROTTLE_RATES':{'anon':'60/min','user':'300/min','login':'10/min', 'hundred':'100/min','support_contact':'10/hour','api_resource':'1200/min'},
  'DEFAULT_RENDERER_CLASSES':('rest_framework.renderers.JSONRenderer',),
 }
 SIMPLE_JWT={'ACCESS_TOKEN_LIFETIME':timedelta(minutes=15),'REFRESH_TOKEN_LIFETIME':timedelta(days=7),'ROTATE_REFRESH_TOKENS':True,'BLACKLIST_AFTER_ROTATION':True}

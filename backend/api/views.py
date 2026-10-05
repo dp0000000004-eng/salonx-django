@@ -16,7 +16,7 @@ from rest_framework.decorators import api_view, permission_classes, action, thro
 from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError as DRFValidationError
-from rest_framework.throttling import AnonRateThrottle
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from .throttles import CostumThrottle
 from .models import *
@@ -26,6 +26,12 @@ from .permissions import IsAdmin, IsOwnerOrAdmin, role
 
 class LoginRateThrottle(AnonRateThrottle):
     scope = 'login'
+
+class SupportContactThrottle(UserRateThrottle):
+    scope = 'support_contact'
+
+class ApiResourceThrottle(UserRateThrottle):
+    scope = 'api_resource'
 
 
 @api_view(['GET'])
@@ -45,6 +51,40 @@ def admin_status(request):
         id__in=UserRole.objects.filter(role='super_admin').values('user_id')
     ).count()
     return Response({'super_admin_count':super_admin_count})
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@throttle_classes([SupportContactThrottle])
+def subscription_contact_admin(request):
+    salon_id=request.data.get('salon_id')
+    if not salon_id:
+        return Response({'error':'Salon ID is required.'},status=400)
+    salon=Salon.objects.filter(id=salon_id,owner=request.user).first()
+    if not salon:
+        return Response({'error':'You may only contact admin about your own salon.'},status=404)
+
+    subscription=Subscription.objects.filter(salon=salon).first()
+    if subscription:
+        subscription_status=subscription.status
+        expiry=subscription.end_at
+        priority='high' if expiry and expiry<=timezone.now() else 'medium'
+        expiry_label=expiry.isoformat() if expiry else 'not set'
+    else:
+        subscription_status='not started'
+        priority='high'
+        expiry_label='not set'
+
+    ticket=SupportTicket.objects.create(
+        user=request.user,
+        salon=salon,
+        subject='Subscription help request',
+        description=(
+            f"Category: renewal\n\nPlease help with my SalonX subscription. "
+            f"Current status: {subscription_status}. Expiry: {expiry_label}."
+        ),
+        priority=priority,
+    )
+    return Response({'id':str(ticket.id)},status=201)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -141,6 +181,13 @@ def scoped_queryset(queryset, resource, user):
         return queryset
     if resource=='legacy':
         return queryset.filter(owner_id=user_id)
+    if resource=='salon_categories':
+        owned_salons=Salon.objects.filter(owner_id=user_id).values('id')
+        return queryset.filter(
+            resource=resource,
+            owner_id=user_id,
+            data__salon_id__in=[str(salon_id) for salon_id in owned_salons],
+        )
     return queryset.none()
 
 def query_field_name(model, name):
@@ -277,6 +324,7 @@ class ResourcePermission(BasePermission):
 
 @api_view(['GET','POST','PATCH','PUT','DELETE'])
 @permission_classes([ResourcePermission])
+@throttle_classes([AnonRateThrottle, ApiResourceThrottle])
 def db_resource(request, resource):
     is_legacy = resource not in MODEL_MAP
     Model,Ser = (LegacyRecord,LegacyRecordSerializer) if is_legacy else MODEL_MAP[resource]
@@ -324,6 +372,20 @@ def db_resource(request, resource):
             return Response(rows)
         if request.method=='POST':
             data=request.data.copy()
+            if resource=='salon_categories':
+                salon_id=data.get('salon_id')
+                category_id=data.get('category_id')
+                if not salon_id or not category_id:
+                    return Response({'error':'Salon and category are required.'},status=400)
+                if not Salon.objects.filter(id=salon_id,owner=request.user).exists():
+                    return Response({'error':'You may only manage categories for your own salon.'},status=403)
+                existing=qs.filter(
+                    owner=request.user,
+                    data__salon_id=str(salon_id),
+                    data__category_id=str(category_id),
+                ).first()
+                if existing:
+                    return Response({'id':str(existing.id),**(existing.data or {})},status=200)
             conflict=request.query_params.get('on_conflict')
             if conflict:
                 matches={field:data[field] for field in conflict.split(',') if field in data}
@@ -337,6 +399,19 @@ def db_resource(request, resource):
                     existing.save(update_fields=['data','updated_at'])
                     return Response({'id':str(existing.id),**existing.data})
             obj=Model.objects.create(resource=resource,data=data,owner=request.user if request.user.is_authenticated else None); return Response({'id':str(obj.id),**data},status=201)
+        if request.method=='DELETE' and resource=='salon_categories':
+            salon_id=request.query_params.get('salon_id')
+            category_id=request.query_params.get('category_id')
+            if not salon_id or not category_id:
+                return Response({'error':'Salon and category are required.'},status=400)
+            if not Salon.objects.filter(id=salon_id,owner=request.user).exists():
+                return Response({'error':'You may only manage categories for your own salon.'},status=403)
+            deleted,_=qs.filter(
+                owner=request.user,
+                data__salon_id=str(salon_id),
+                data__category_id=str(category_id),
+            ).delete()
+            return Response(status=204 if deleted else 404)
         obj_id=request.query_params.get('id') or request.data.get('id')
         obj=scoped_queryset(Model.objects.filter(resource=resource),resource,request.user).filter(id=obj_id).first()
         if not obj: return Response({'error':'Not found'},status=404)
