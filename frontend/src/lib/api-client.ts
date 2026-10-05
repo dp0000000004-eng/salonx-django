@@ -2,7 +2,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const API_URL = (import.meta.env["VITE_API_URL"] || "http://127.0.0.1:8000/api").replace(/\/$/, "");
 
-type ApiError = { message: string; status?: number; code?: string; details?: unknown };
+type ApiError = {
+  message: string;
+  status?: number;
+  code?: string;
+  details?: unknown;
+  retryAfter?: number;
+};
 // Compatibility endpoints return resource-specific row shapes, so keep the dynamic boundary explicit.
 type ApiRow = any;
 type ApiResult<T = ApiRow[]> = { data: T | null; error: ApiError | null; count?: number | null };
@@ -20,7 +26,11 @@ function authHeaders(extra: Record<string, string> = {}) {
   };
 }
 
-function normalizeError(body: any, status?: number): ApiError {
+function normalizeError(body: any, status?: number, retryAfter?: number): ApiError {
+  const metadata = {
+    ...(status !== undefined && { status }),
+    ...(retryAfter !== undefined && { retryAfter }),
+  };
   if (body && typeof body === "object" && !Array.isArray(body)) {
     const message =
       body.error ||
@@ -31,14 +41,14 @@ function normalizeError(body: any, status?: number): ApiError {
         .join("; ");
     return {
       message: message || `HTTP ${status ?? 0}`,
-      ...(status !== undefined && { status }),
+      ...metadata,
       ...(typeof body.code === "string" && { code: body.code }),
       details: body,
     };
   }
   return {
     message: String(body || `HTTP ${status ?? 0}`),
-    ...(status !== undefined && { status }),
+    ...metadata,
   };
 }
 
@@ -155,7 +165,18 @@ async function request<T = any>(
       }
     }
 
-    if (!response.ok) return { data: null, error: normalizeError(body, response.status) };
+    if (!response.ok) {
+      const retryAfterHeader = response.headers.get("Retry-After");
+      const retryAfter = retryAfterHeader ? Number(retryAfterHeader) : NaN;
+      return {
+        data: null,
+        error: normalizeError(
+          body,
+          response.status,
+          Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined,
+        ),
+      };
+    }
 
     if (
       body &&
@@ -541,6 +562,30 @@ function channel(name: string) {
 
 const api = {
   from: (resource: string) => new QueryBuilder(resource),
+  adminStatus: async () => request<{ super_admin_count: number }>("/admin/status/"),
+  nearbySalons: async (latitude: number, longitude: number, limit = 200) => {
+    const params = new URLSearchParams({
+      lat: String(latitude),
+      lng: String(longitude),
+      limit: String(limit),
+    });
+    return request<{ salon_id: string; distance_km: number }[]>(
+      `/salons/nearby/?${params.toString()}`,
+    );
+  },
+  reverseGeocode: async (latitude: number, longitude: number) => {
+    const params = new URLSearchParams({
+      lat: String(latitude),
+      lng: String(longitude),
+    });
+    return request<{
+      address: string;
+      area: string;
+      district: string;
+      state: string;
+      pinCode: string;
+    }>(`/locations/reverse-geocode/?${params.toString()}`);
+  },
   rpc: async (name: string, args: Record<string, any> = {}) =>
     request(`/rpc/${encodeURIComponent(name)}/`, { method: "POST", body: JSON.stringify(args) }),
   auth,

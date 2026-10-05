@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { CreditCard, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -19,6 +20,7 @@ import {
 } from "@/lib/admin/core";
 import {
   daysLeft,
+  manageSubscription,
   subState,
   useActivePlan,
   useAllSubscriptions,
@@ -36,10 +38,14 @@ export const Route = createFileRoute("/master-dashboard/subscriptions")({
 function SubscriptionsPage() {
   const plan = useActivePlan();
   const subs = useAllSubscriptions();
+  const queryClient = useQueryClient();
   const detail = useModal<SubscriptionRow>();
-  const busy = false;
+  const [busy, setBusy] = useState(false);
 
-  useRealtime(["salon_subscriptions", "subscription_status_history"], [["admin_subscriptions"], ["subscription_history"]]);
+  useRealtime(
+    ["salon_subscriptions", "subscription_status_history"],
+    [["admin_subscriptions"], ["subscription_history"]],
+  );
 
   const rows = subs.data ?? [];
   const counts = rows.reduce<Record<string, number>>((acc, r) => {
@@ -50,11 +56,24 @@ function SubscriptionsPage() {
   const price = plan.data?.price ?? 0;
   const mrr = rows.filter((r) => subState(r) === "active").length * price;
 
-  // Display-only until the SalonX subscription backend is connected — no changes are saved here.
-  function act(_row: SubscriptionRow, action: SubscriptionAction) {
-    toast.info(`"${action.replace("_", " ")}" will be available once the subscription backend is connected.`);
+  async function act(row: SubscriptionRow, action: SubscriptionAction, days = 30, note?: string) {
+    setBusy(true);
+    try {
+      await manageSubscription(row.salon_id, action, days, note);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin_subscriptions"] }),
+        queryClient.invalidateQueries({ queryKey: ["subscription_history", row.salon_id] }),
+        queryClient.invalidateQueries({ queryKey: ["salon_subscription", row.salon_id] }),
+        queryClient.invalidateQueries({ queryKey: ["salon_subscription_states"] }),
+      ]);
+      toast.success(`Subscription ${action.replaceAll("_", " ")} completed.`);
+      detail.close();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update the subscription.");
+    } finally {
+      setBusy(false);
+    }
   }
-
 
   return (
     <div className="space-y-4">
@@ -73,14 +92,20 @@ function SubscriptionsPage() {
           {(["trialing", "active", "expired", "cancelled", "suspended"] as const).map((k) => (
             <Stat key={k} label={k} value={num(counts[k] ?? 0)} />
           ))}
-          <Stat label="Monthly revenue" value={inr(mrr)} />
+          <Stat label="Active plan value (not collected)" value={inr(mrr)} />
         </div>
       </Panel>
 
       <Panel title="Salon Subscriptions" icon={CreditCard}>
         <DataState
           query={subs}
-          empty={<Empty title="No subscriptions yet." description="A subscription starts when you approve a salon." icon={CreditCard} />}
+          empty={
+            <Empty
+              title="No subscriptions yet."
+              description="A subscription starts when you approve a salon."
+              icon={CreditCard}
+            />
+          }
         >
           {(list) => (
             <TableWrap>
@@ -113,7 +138,11 @@ function SubscriptionsPage() {
                         {s.trial_end_date ? (
                           <>
                             {dateLabel(s.trial_end_date)}
-                            {state === "trialing" && <span className="ml-2 text-warning">{daysLeft(s.trial_end_date)}d left</span>}
+                            {state === "trialing" && (
+                              <span className="ml-2 text-warning">
+                                {daysLeft(s.trial_end_date)}d left
+                              </span>
+                            )}
                           </>
                         ) : (
                           "—"
@@ -121,9 +150,7 @@ function SubscriptionsPage() {
                       </Td>
                       <Td>{dateLabel(s.started_at)}</Td>
                       <Td>{dateLabel(s.expires_at)}</Td>
-                      <Td>
-                        {s.subscription_plans?.name ?? "All-in-One Unlimited"}
-                      </Td>
+                      <Td>{s.subscription_plans?.name ?? "All-in-One Unlimited"}</Td>
                       <Td right>
                         <div className="flex justify-end gap-1">
                           <Btn variant="soft" onClick={() => detail.open(s)}>
@@ -140,7 +167,9 @@ function SubscriptionsPage() {
         </DataState>
       </Panel>
 
-      {detail.state && <ManageModal row={detail.state} busy={busy} onAct={act} onClose={detail.close} />}
+      {detail.state && (
+        <ManageModal row={detail.state} busy={busy} onAct={act} onClose={detail.close} />
+      )}
     </div>
   );
 }
@@ -162,14 +191,19 @@ function ManageModal({
 }: {
   row: SubscriptionRow;
   busy: boolean;
-  onAct: (row: SubscriptionRow, action: SubscriptionAction, days?: number) => void;
+  onAct: (row: SubscriptionRow, action: SubscriptionAction, days?: number, note?: string) => void;
   onClose: () => void;
 }) {
   const [days, setDays] = useState(30);
   const history = useSubscriptionHistory(row.salon_id);
   const state = subState(row);
 
-  const actions: { label: string; action: SubscriptionAction; days?: number; variant?: "primary" | "ghost" | "danger" }[] = [
+  const actions: {
+    label: string;
+    action: SubscriptionAction;
+    days?: number;
+    variant?: "primary" | "ghost" | "danger";
+  }[] = [
     { label: "Activate", action: "activate" },
     { label: "Renew", action: "renew" },
     { label: `Extend ${days} days`, action: "extend" },
@@ -201,21 +235,30 @@ function ManageModal({
       </label>
 
       <p className="mt-3 rounded-lg bg-muted p-2 text-[11px] text-muted-foreground">
-        Preview only: these actions will work once the subscription backend is connected.
+        These are manual admin changes to subscription access; they do not charge the salon. Online
+        payment processing is not connected.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {actions.map((a) => (
-          <Btn key={a.action} variant={a.variant ?? "primary"} disabled={busy} onClick={() => onAct(row, a.action, a.days ?? days)}>
+          <Btn
+            key={a.action}
+            variant={a.variant ?? "primary"}
+            disabled={busy}
+            onClick={() => onAct(row, a.action, a.days ?? days)}
+          >
             {a.label}
           </Btn>
         ))}
       </div>
 
-      <RenewForm row={row} onDone={onClose} />
+      <RenewForm row={row} busy={busy} onRenew={(days, note) => onAct(row, "renew", days, note)} />
 
       <div className="mt-5 border-t border-border pt-4">
         <h4 className="mb-2 text-xs font-semibold text-foreground">Status history</h4>
-        <DataState query={history} empty={<p className="text-xs text-muted-foreground">No changes recorded yet.</p>}>
+        <DataState
+          query={history}
+          empty={<p className="text-xs text-muted-foreground">No changes recorded yet.</p>}
+        >
           {(list) => (
             <ul className="space-y-1.5 text-xs">
               {list.map((h) => (
@@ -249,47 +292,59 @@ const DURATIONS = [
   { label: "6 months", days: 180 },
   { label: "12 months", days: 365 },
 ];
-const iso = (d: Date) => d.toISOString().slice(0, 10);
-
-function RenewForm({ row, onDone }: { row: SubscriptionRow; onDone: () => void }) {
-  const baseStart = new Date(Math.max(Date.now(), new Date(row.expires_at).getTime() || 0));
-  const [start, setStart] = useState(iso(baseStart));
-  const [end, setEnd] = useState(iso(new Date(baseStart.getTime() + 30 * 864e5)));
+function RenewForm({
+  busy,
+  onRenew,
+}: {
+  busy: boolean;
+  onRenew: (days: number, note?: string) => void;
+}) {
+  const [days, setDays] = useState(30);
   const [note, setNote] = useState("");
-  const busy = false;
-
-  function pick(days: number) {
-    setEnd(iso(new Date(new Date(start).getTime() + days * 864e5)));
-  }
-
-  function submit() {
-    if (new Date(end) <= new Date(start)) { toast.error("End date must be after the start date."); return; }
-    toast.info("Renewal will be available once the subscription backend is connected.");
-    onDone();
-  }
-
-
   const cls = "mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm";
   return (
     <div className="mt-5 border-t border-border pt-4">
-      <h4 className="mb-2 text-xs font-semibold text-foreground">Renew with custom dates</h4>
+      <h4 className="mb-2 text-xs font-semibold text-foreground">Renew subscription</h4>
       <div className="flex flex-wrap gap-2">
-        {DURATIONS.map((d) => (
-          <Btn key={d.days} variant="soft" onClick={() => pick(d.days)}>{d.label}</Btn>
+        {DURATIONS.map((duration) => (
+          <Btn
+            key={duration.days}
+            variant="soft"
+            disabled={busy}
+            onClick={() => setDays(duration.days)}
+          >
+            {duration.label}
+          </Btn>
         ))}
       </div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <label className="text-xs font-medium text-foreground">Start date
-          <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className={cls} />
-        </label>
-        <label className="text-xs font-medium text-foreground">End date
-          <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className={cls} />
-        </label>
-      </div>
-      <label className="mt-3 block text-xs font-medium text-foreground">Reason / note
-        <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Paid by UPI, ref 1234" className={cls} />
+      <label className="mt-3 block text-xs font-medium text-foreground">
+        Days
+        <input
+          type="number"
+          min={1}
+          max={3650}
+          value={days}
+          onChange={(e) => setDays(Number(e.target.value))}
+          className={cls}
+        />
       </label>
-      <Btn className="mt-3" disabled={busy} onClick={submit}>{busy ? "Saving…" : "Renew subscription"}</Btn>
+      <label className="mt-3 block text-xs font-medium text-foreground">
+        Reason / note
+        <input
+          value={note}
+          maxLength={500}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="e.g. Paid by UPI, ref 1234"
+          className={cls}
+        />
+      </label>
+      <Btn
+        className="mt-3"
+        disabled={busy || !Number.isInteger(days) || days < 1 || days > 3650}
+        onClick={() => onRenew(days, note.trim() || undefined)}
+      >
+        {busy ? "Saving…" : "Renew subscription"}
+      </Btn>
     </div>
   );
 }

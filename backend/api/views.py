@@ -1,3 +1,8 @@
+from datetime import timedelta as datetime_timedelta
+import json
+from urllib.error import URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.db import transaction
@@ -7,14 +12,21 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from rest_framework import status, viewsets
-from rest_framework.decorators import api_view, permission_classes, action
+from rest_framework.decorators import api_view, permission_classes, action, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError as DRFValidationError
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
+from .throttles import CostumThrottle
 from .models import *
 from .serializers import *
 from .permissions import IsAdmin, IsOwnerOrAdmin, role
+
+
+class LoginRateThrottle(AnonRateThrottle):
+    scope = 'login'
+
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -24,6 +36,15 @@ def health(request):
         'service':'salonx-django',
         'database':settings.DATABASES['default']['ENGINE'].rsplit('.',1)[-1],
     })
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_status(request):
+    super_admin_count = UserRole.objects.filter(role='super_admin').count()
+    super_admin_count += User.objects.filter(is_staff=True).exclude(
+        id__in=UserRole.objects.filter(role='super_admin').values('user_id')
+    ).count()
+    return Response({'super_admin_count':super_admin_count})
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -35,9 +56,11 @@ def register(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([CostumThrottle, LoginRateThrottle])
 def login(request):
     email=str(request.data.get('email','')).lower().strip(); password=request.data.get('password','')
-    user=authenticate(username=email,password=password)
+    account=User.objects.filter(email__iexact=email).first()
+    user=authenticate(username=account.username,password=password) if account else None
     if not user or not user.is_active: return Response({'error':'Invalid credentials'},status=401)
     refresh=RefreshToken.for_user(user); return Response({'user':UserSerializer(user).data,'access':str(refresh.access_token),'refresh':str(refresh)})
 
@@ -440,6 +463,8 @@ def db_resource(request, resource):
     if not obj: return Response({'error':'Not found'},status=404)
     if resource=='user_roles' and not is_admin_user(request.user):
         return Response({'error':'Forbidden'},status=403)
+    if resource=='salons' and not is_admin_user(request.user) and obj.owner_id != request.user.id:
+        return Response({'error':'You may only update your own salon'},status=403)
     if resource=='bookings' and not is_admin_user(request.user):
         if obj.customer_id != request.user.id or request.data.get('status') != 'cancelled':
             return Response({'error':'Customers may only cancel their own bookings'},status=403)
@@ -513,7 +538,8 @@ def rpc_dispatch(request, name):
     if name == 'payment_gateway_test':
         if not is_admin: return Response({'error':'Forbidden'},status=403)
         provider=a.get('provider')
-        if provider not in {'razorpay','phonepe'}: return Response({'error':'Unknown payment gateway'},status=400)
+        if provider not in {'razorpay','phonepe'}:
+            return Response({'error':'Unknown payment gateway'},status=400)
         # Provider credentials/payment calls are deliberately not wired yet.
         row=PaymentGatewaySettings.objects.filter(provider=provider).first()
         if row:
@@ -560,13 +586,71 @@ def rpc_dispatch(request, name):
 
     if name == 'admin_set_salon_status':
         if not is_admin: return Response({'error':'Forbidden'},status=403)
-        salon=Salon.objects.filter(id=a.get('_salon_id')).first()
-        if not salon: return Response({'error':'Salon not found'},status=404)
-        salon.status=a.get('_status','pending')
-        salon.is_active=salon.status=='approved'
-        if salon.status=='approved': salon.approved_at=timezone.now()
-        salon.save(update_fields=['status','is_active','approved_at','updated_at'])
-        return Response(True)
+        with transaction.atomic():
+            salon=Salon.objects.select_for_update().filter(id=a.get('_salon_id')).first()
+            if not salon: return Response({'error':'Salon not found'},status=404)
+            salon.status=a.get('_status','pending')
+            salon.is_active=salon.status=='approved'
+            now=timezone.now()
+            if salon.status=='approved':
+                first_approval=salon.approved_at is None
+                salon.approved_at=salon.approved_at or now
+                sub=SalonSubscription.objects.select_for_update().filter(salon=salon).first()
+                if sub:
+                    Subscription.objects.update_or_create(
+                        salon=salon,
+                        defaults={'plan':sub.plan,'start_at':sub.started_at,'end_at':sub.expires_at,'status':sub.status}
+                    )
+                else:
+                    legacy=Subscription.objects.select_for_update().filter(salon=salon).first()
+                    if legacy:
+                        legacy_status={
+                            'trial':'trialing',
+                            'trialing':'trialing',
+                            'active':'active',
+                            'expired':'expired',
+                            'cancelled':'cancelled',
+                            'suspended':'suspended',
+                        }.get(legacy.status)
+                        if not legacy_status:
+                            return Response({'error':'Existing subscription has an unsupported status; resolve it before approving this salon.'},status=400)
+                        sub=SalonSubscription.objects.create(
+                            salon=salon,
+                            owner=salon.owner,
+                            plan=legacy.plan,
+                            status=legacy_status,
+                            started_at=legacy.start_at,
+                            expires_at=legacy.end_at,
+                            trial_start_date=legacy.start_at if legacy_status=='trialing' else None,
+                            trial_end_date=legacy.end_at if legacy_status=='trialing' else None,
+                        )
+                    else:
+                        plan=SubscriptionPlan.objects.filter(is_active=True).first()
+                        if not plan:
+                            return Response({'error':'No active subscription plan is configured.'},status=400)
+                        trial_enabled=first_approval and plan.trial_enabled and plan.trial_days>0
+                        expiry=now+datetime_timedelta(days=plan.trial_days) if trial_enabled else now
+                        sub=SalonSubscription.objects.create(
+                            salon=salon,
+                            owner=salon.owner,
+                            plan=plan,
+                            status='trialing' if trial_enabled else 'expired',
+                            started_at=now,
+                            expires_at=expiry,
+                            trial_start_date=now if trial_enabled else None,
+                            trial_end_date=expiry if trial_enabled else None,
+                        )
+                    Subscription.objects.update_or_create(
+                        salon=salon,
+                        defaults={'plan':sub.plan,'start_at':sub.started_at,'end_at':sub.expires_at,'status':sub.status}
+                    )
+                    SubscriptionStatusHistory.objects.create(
+                        salon=salon,
+                        status=sub.status,
+                        note='Subscription initialized or migrated on salon approval',
+                    )
+            salon.save(update_fields=['status','is_active','approved_at','updated_at'])
+            return Response(True)
 
     if name == 'owner_resubmit_salon':
         salon=Salon.objects.filter(id=a.get('_salon_id'),owner=user).first()
@@ -701,32 +785,59 @@ def rpc_dispatch(request, name):
 
     if name == 'admin_manage_subscription':
         if not is_admin: return Response({'error':'Forbidden'},status=403)
-        salon=Salon.objects.filter(id=a.get('_salon_id')).first()
-        if not salon: return Response({'error':'Salon not found'},status=404)
-        plan=SubscriptionPlan.objects.filter(is_active=True).first()
-        if not plan: plan=SubscriptionPlan.objects.create(code='all_in_one',name='ALL-IN-ONE UNLIMITED',price=0,trial_days=14)
-        now=timezone.now()
-        sub,_=SalonSubscription.objects.get_or_create(
-            salon=salon,
-            defaults={'owner':salon.owner,'plan':plan,'started_at':now,'expires_at':now,'status':'trialing'}
-        )
-        # Compatibility with older Subscription table as well.
-        Subscription.objects.update_or_create(salon=salon,defaults={'plan':plan,'start_at':sub.started_at,'end_at':sub.expires_at,'status':sub.status})
-        action=a.get('_action'); days=int(a.get('_days',30))
-        from datetime import timedelta
-        if action in {'activate','renew','extend','extend_trial','reactivate'}:
-            start=max(sub.expires_at,now) if action in {'renew','extend','extend_trial'} else now
-            sub.started_at=start; sub.expires_at=start+timedelta(days=days)
-            sub.status='active' if action in {'activate','renew','reactivate'} else 'trialing'
-            if action=='extend_trial': sub.trial_start_date=sub.trial_start_date or now; sub.trial_end_date=sub.expires_at
-            sub.cancelled_at=None; sub.suspended_at=None
-        elif action=='end_trial': sub.expires_at=now; sub.status='expired'
-        elif action=='cancel': sub.status='cancelled'; sub.cancelled_at=now
-        elif action=='suspend': sub.status='suspended'; sub.suspended_at=now
-        sub.plan=plan; sub.owner=salon.owner; sub.save()
-        Subscription.objects.update_or_create(salon=salon,defaults={'plan':plan,'start_at':sub.started_at,'end_at':sub.expires_at,'status':sub.status})
-        SubscriptionStatusHistory.objects.create(salon=salon,status=sub.status,note=a.get('_note',''))
-        return Response(SalonSubscriptionSerializer(sub).data)
+        action=a.get('_action')
+        allowed_actions={'activate','renew','extend','extend_trial','end_trial','cancel','suspend','reactivate'}
+        if not isinstance(action,str) or action not in allowed_actions:
+            return Response({'error':'Unsupported subscription action.'},status=400)
+        try:
+            raw_days=a.get('_days',30)
+            if isinstance(raw_days,bool): raise ValueError
+            if isinstance(raw_days,float) and not raw_days.is_integer(): raise ValueError
+            days=int(raw_days)
+        except (TypeError,ValueError):
+            return Response({'error':'Subscription days must be a whole number between 1 and 3650.'},status=400)
+        if days<1 or days>3650:
+            return Response({'error':'Subscription days must be a whole number between 1 and 3650.'},status=400)
+
+        with transaction.atomic():
+            salon=Salon.objects.select_for_update().filter(id=a.get('_salon_id')).first()
+            if not salon: return Response({'error':'Salon not found'},status=404)
+            plan=SubscriptionPlan.objects.filter(is_active=True).first()
+            if not plan: return Response({'error':'No active subscription plan is configured.'},status=400)
+            now=timezone.now()
+            sub,_=SalonSubscription.objects.get_or_create(
+                salon=salon,
+                defaults={'owner':salon.owner,'plan':plan,'started_at':now,'expires_at':now,'status':'trialing'}
+            )
+            if action in {'activate','renew','extend','extend_trial','reactivate'}:
+                start=max(sub.expires_at,now)
+                sub.started_at=start
+                sub.expires_at=start+datetime_timedelta(days=days)
+                sub.status='trialing' if action=='extend_trial' else 'active'
+                if action=='extend_trial':
+                    sub.trial_start_date=sub.trial_start_date or now
+                    sub.trial_end_date=sub.expires_at
+                sub.cancelled_at=None
+                sub.suspended_at=None
+            elif action=='end_trial':
+                sub.expires_at=now
+                sub.status='expired'
+            elif action=='cancel':
+                sub.status='cancelled'
+                sub.cancelled_at=now
+            elif action=='suspend':
+                sub.status='suspended'
+                sub.suspended_at=now
+            sub.plan=plan
+            sub.owner=salon.owner
+            sub.save()
+            Subscription.objects.update_or_create(
+                salon=salon,
+                defaults={'plan':plan,'start_at':sub.started_at,'end_at':sub.expires_at,'status':sub.status}
+            )
+            note=str(a.get('_note') or '').strip()[:500] or action.replace('_',' ')
+            SubscriptionStatusHistory.objects.create(salon=salon,status=sub.status,note=note)
+            return Response(SalonSubscriptionSerializer(sub).data)
 
     if name == 'salon_subscription_states_for':
         salon_ids=a.get('_salon_ids') or a.get('salon_ids') or []
@@ -737,6 +848,126 @@ def rpc_dispatch(request, name):
         return Response([])
 
     return Response({'error':f'Unknown RPC: {name}'},status=404)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def salons_nearby(request):
+    from math import asin, cos, isfinite, radians, sin, sqrt
+
+    try:
+        latitude=float(request.query_params.get('lat',''))
+        longitude=float(request.query_params.get('lng',''))
+        limit=int(request.query_params.get('limit','200'))
+    except (TypeError,ValueError):
+        return Response({'error':'Valid latitude and longitude are required.'},status=400)
+    if (
+        not isfinite(latitude) or not isfinite(longitude)
+        or not -90<=latitude<=90 or not -180<=longitude<=180
+    ):
+        return Response({'error':'Latitude or longitude is out of range.'},status=400)
+    if not 1<=limit<=500:
+        return Response({'error':'Limit must be between 1 and 500.'},status=400)
+
+    rows=[]
+    salons=Salon.objects.filter(
+        status='approved',
+        is_active=True,
+        latitude__isnull=False,
+        longitude__isnull=False,
+    ).only('id','latitude','longitude')
+    for salon in salons.iterator():
+        salon_latitude=float(salon.latitude)
+        salon_longitude=float(salon.longitude)
+        dlat=radians(salon_latitude-latitude)
+        dlng=radians(salon_longitude-longitude)
+        haversine=(
+            sin(dlat/2)**2
+            + cos(radians(latitude))*cos(radians(salon_latitude))*sin(dlng/2)**2
+        )
+        distance=6371*2*asin(sqrt(min(1.0,max(0.0,haversine))))
+        rows.append({'salon_id':str(salon.id),'distance_km':round(distance,3)})
+    rows.sort(key=lambda row:row['distance_km'])
+    return Response(rows[:limit])
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def reverse_geocode(request):
+    """Resolve coordinates using the deployment's configured private geocoder."""
+    from math import isfinite
+
+    try:
+        latitude = float(request.query_params.get('lat', ''))
+        longitude = float(request.query_params.get('lng', ''))
+    except (TypeError, ValueError):
+        return Response({'error':'Valid latitude and longitude are required.'},status=400)
+    if (
+        not isfinite(latitude) or not isfinite(longitude)
+        or not -90 <= latitude <= 90 or not -180 <= longitude <= 180
+    ):
+        return Response({'error':'Latitude or longitude is out of range.'},status=400)
+
+    geocoder_url = settings.REVERSE_GEOCODER_URL
+    if not geocoder_url:
+        return Response(
+            {'error':'Reverse geocoding is not configured. Enter the address manually.'},
+            status=503,
+        )
+
+    query = urlencode({
+        'lat':latitude,
+        'lon':longitude,
+        'format':'jsonv2',
+        'addressdetails':1,
+    })
+    separator = '&' if '?' in geocoder_url else '?'
+    upstream_request = Request(
+        f'{geocoder_url}{separator}{query}',
+        headers={'Accept':'application/json','User-Agent':'SalonX/1.0'},
+    )
+    try:
+        with urlopen(upstream_request, timeout=5) as response:
+            result = json.loads(response.read())
+    except (URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError):
+        return Response(
+            {'error':'The configured reverse-geocoding service could not resolve this location.'},
+            status=502,
+        )
+
+    if not isinstance(result, dict) or not isinstance(result.get('address'), dict):
+        return Response({'error':'No address details were found for this location.'},status=404)
+
+    address_parts = result['address']
+    area_names = (
+        address_parts.get('neighbourhood'),
+        address_parts.get('suburb'),
+        address_parts.get('quarter'),
+        address_parts.get('residential'),
+        address_parts.get('village'),
+        address_parts.get('hamlet'),
+    )
+    state_name = address_parts.get('state')
+    district_name = (
+        address_parts.get('state_district')
+        or address_parts.get('district')
+        or address_parts.get('county')
+    )
+    state = Location.objects.filter(
+        level='state', is_active=True, name__iexact=state_name or '',
+    ).first()
+    district = Location.objects.filter(
+        level='district', is_active=True, parent=state,
+        name__iexact=district_name or '',
+    ).first() if state else None
+
+    return Response({
+        'address':str(result.get('display_name') or '').strip(),
+        'area':next((str(value).strip() for value in area_names if value), ''),
+        'district':district.name if district else '',
+        'state':state.name if state else '',
+        'pinCode':str(address_parts.get('postcode') or '').strip(),
+    })
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -749,9 +980,11 @@ def booking_create(request):
         if conflict: return Response({'error':'Selected time is no longer available'},status=409)
         s=BookingSerializer(data=data); s.is_valid(raise_exception=True); booking=s.save(); return Response(BookingSerializer(booking).data,status=201)
 
+
 @api_view(['POST'])
 @permission_classes([IsAdmin])
 def admin_action(request, action): return Response({'ok':True,'action':action,'note':'Use dedicated admin serializers/actions for production changes.'})
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])

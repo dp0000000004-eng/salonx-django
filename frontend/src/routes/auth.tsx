@@ -26,7 +26,9 @@ function landingFor(roles: string[]): "/master-dashboard" | "/owner" | "/account
   return "/account";
 }
 
-async function landingForUser(userId: string | undefined) {
+async function landingForUser(userId: string | undefined, role?: string) {
+  if (role === "super_admin") return "/master-dashboard" as const;
+  if (role === "salon_owner") return "/owner" as const;
   if (!userId) return "/account" as const;
   const { data } = await api.from("user_roles").select("role").eq("user_id", userId);
   return landingFor(((data ?? []) as { role: string }[]).map((r) => r.role));
@@ -57,7 +59,7 @@ function AuthPage() {
         const { data: signIn, error } = await api.auth.signInWithPassword({ email, password });
         if (error) throw error;
         toast.success("Welcome back!");
-        const to = await landingForUser(signIn.user?.id);
+        const to = await landingForUser(signIn.user?.id, signIn.user?.role);
         await refresh();
         void navigate({ to, replace: true });
         return;
@@ -82,7 +84,21 @@ function AuthPage() {
       await refresh();
       void navigate({ to: "/account", replace: true });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Something went wrong.");
+      let message = err instanceof Error ? err.message : "Something went wrong.";
+      if (err && typeof err === "object" && "message" in err && typeof err.message === "string") {
+        message = err.message;
+        if ("status" in err && err.status === 429) {
+          const retryAfter =
+            "retryAfter" in err && typeof err.retryAfter === "number"
+              ? ` Please wait ${Math.ceil(err.retryAfter)} seconds before trying again.`
+              : " Please wait a minute before trying again.";
+          message =
+            mode === "signin"
+              ? `Too many sign-in attempts.${retryAfter}`
+              : `Too many requests.${retryAfter}`;
+        }
+      }
+      toast.error(message);
     } finally {
       setBusy(false);
     }

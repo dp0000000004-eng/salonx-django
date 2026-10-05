@@ -22,21 +22,37 @@ import {
 } from "@/lib/queries";
 
 export const Route = createFileRoute("/salons/")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    q: (search["q"] as string) || "",
-    service: (search["service"] as string) || "",
-    city: (search["city"] as string) || "",
-    category: (search["category"] as string) || "",
-    near: search["near"] === "1" || search["near"] === 1 ? "1" : undefined,
-    state: (search["state"] as string) || undefined,
-    district: (search["district"] as string) || undefined,
-  }) as { q: string; service: string; city: string; category: string; near?: string; state?: string; district?: string },
+  validateSearch: (search: Record<string, unknown>) =>
+    ({
+      q: (search["q"] as string) || "",
+      service: (search["service"] as string) || "",
+      city: (search["city"] as string) || "",
+      category: (search["category"] as string) || "",
+      near: search["near"] === "1" || search["near"] === 1 ? "1" : undefined,
+      state: (search["state"] as string) || undefined,
+      district: (search["district"] as string) || undefined,
+    }) as {
+      q: string;
+      service: string;
+      city: string;
+      category: string;
+      near?: string;
+      state?: string;
+      district?: string;
+    },
   head: () => ({
     meta: [
       { title: "Browse Salons Near You — SalonX" },
-      { name: "description", content: "Browse verified salons by city, area or PIN code with live ratings, prices and availability." },
+      {
+        name: "description",
+        content:
+          "Browse verified salons by city, area or PIN code with live ratings, prices and availability.",
+      },
       { property: "og:title", content: "Browse Salons Near You — SalonX" },
-      { property: "og:description", content: "Verified salons with live ratings, prices and availability." },
+      {
+        property: "og:description",
+        content: "Verified salons with live ratings, prices and availability.",
+      },
     ],
   }),
   component: SalonsPage,
@@ -67,7 +83,20 @@ function SalonsPage() {
   const [locating, setLocating] = useState(false);
   const [stateF, setStateF] = useState(search.state ?? "");
   const [districtF, setDistrictF] = useState(search.district ?? "");
-  const filters: SalonFilters = { q, city, service, category: search.category, sort, homeService, verifiedOnly, page, pageSize, near, state: stateF, district: districtF };
+  const filters: SalonFilters = {
+    q,
+    city,
+    service,
+    category: search.category,
+    sort,
+    homeService,
+    verifiedOnly,
+    page,
+    pageSize,
+    near,
+    state: stateF,
+    district: districtF,
+  };
   const { data, isLoading, isError, error, refetch } = useSalons(filters);
   const cities = useCities();
   const categories = useServiceCategories();
@@ -82,26 +111,35 @@ function SalonsPage() {
   const sorted = rows;
 
   useEffect(() => {
-    if (search.near === "1") useMyLocation();
+    if (search.near === "1") requestMyLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function useMyLocation() {
-    if (near) { setNear(null); setPage(1); return; }
+  function requestMyLocation() {
+    if (near) {
+      setNear(null);
+      setPage(1);
+      return;
+    }
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setLocDenied(true);
       return;
     }
     setLocating(true);
+    setLocDenied(false);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocating(false);
-        setLocDenied(false);
         setCity("");
+        setStateF("");
+        setDistrictF("");
         setPage(1);
         setNear({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
-      () => { setLocating(false); setLocDenied(true); },
+      () => {
+        setLocating(false);
+        setLocDenied(true);
+      },
       { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
     );
   }
@@ -137,10 +175,13 @@ function SalonsPage() {
           </div>
 
           <button
-            onClick={useMyLocation}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-xs font-medium text-foreground hover:border-primary hover:text-primary"
+            onClick={requestMyLocation}
+            disabled={locating}
+            aria-busy={locating}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-xs font-medium text-foreground hover:border-primary hover:text-primary disabled:cursor-wait disabled:opacity-60"
           >
-            <Navigation className="size-4" /> {locating ? t("search.locating") : near ? t("search.nearOn") : t("search.nearMe")}
+            <Navigation className="size-4" />{" "}
+            {locating ? t("search.locating") : near ? t("search.nearOn") : t("search.nearMe")}
           </button>
           {locDenied && (
             <p className="rounded-lg border border-destructive/40 bg-destructive/5 p-2 text-[11px] text-foreground">
@@ -149,8 +190,24 @@ function SalonsPage() {
           )}
           <div className="space-y-2">
             <h2 className="text-sm font-semibold text-foreground">{t("search.stateDistrict")}</h2>
-            <input value={stateF} onChange={(e) => { setStateF(e.target.value); setPage(1); }} placeholder={t("search.state")} className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-xs outline-none" />
-            <input value={districtF} onChange={(e) => { setDistrictF(e.target.value); setPage(1); }} placeholder={t("search.district")} className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-xs outline-none" />
+            <input
+              value={stateF}
+              onChange={(e) => {
+                setStateF(e.target.value);
+                setPage(1);
+              }}
+              placeholder={t("search.state")}
+              className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-xs outline-none"
+            />
+            <input
+              value={districtF}
+              onChange={(e) => {
+                setDistrictF(e.target.value);
+                setPage(1);
+              }}
+              placeholder={t("search.district")}
+              className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-xs outline-none"
+            />
           </div>
 
           <div>
@@ -159,12 +216,23 @@ function SalonsPage() {
               <p className="mt-2 text-xs text-muted-foreground">No cities listed yet.</p>
             ) : (
               <div className="mt-2 flex flex-wrap gap-2">
-                <FilterChip active={city === ""} onClick={() => { setCity(""); setPage(1); }}>All</FilterChip>
+                <FilterChip
+                  active={city === ""}
+                  onClick={() => {
+                    setCity("");
+                    setPage(1);
+                  }}
+                >
+                  All
+                </FilterChip>
                 {(cities.data ?? []).map((c) => (
                   <FilterChip
                     key={c.city}
                     active={city === c.city}
-                    onClick={() => { setCity(city === c.city ? "" : c.city); setPage(1); }}
+                    onClick={() => {
+                      setCity(city === c.city ? "" : c.city);
+                      setPage(1);
+                    }}
                   >
                     {c.city} ({c.count})
                   </FilterChip>
@@ -176,10 +244,22 @@ function SalonsPage() {
           <div>
             <h2 className="text-sm font-semibold text-foreground">Filters</h2>
             <div className="mt-2 flex flex-wrap gap-2">
-              <FilterChip active={verifiedOnly} onClick={() => { setVerifiedOnly((v) => !v); setPage(1); }}>
+              <FilterChip
+                active={verifiedOnly}
+                onClick={() => {
+                  setVerifiedOnly((v) => !v);
+                  setPage(1);
+                }}
+              >
                 Verified only
               </FilterChip>
-              <FilterChip active={homeService} onClick={() => { setHomeService((v) => !v); setPage(1); }}>
+              <FilterChip
+                active={homeService}
+                onClick={() => {
+                  setHomeService((v) => !v);
+                  setPage(1);
+                }}
+              >
                 Home service
               </FilterChip>
             </div>
@@ -192,7 +272,10 @@ function SalonsPage() {
               <span className="text-muted-foreground">Showing salons that offer</span>
               <span className="font-medium text-foreground">{service}</span>
               <button
-                onClick={() => { setService(""); setPage(1); }}
+                onClick={() => {
+                  setService("");
+                  setPage(1);
+                }}
                 className="ml-auto rounded-md px-2 py-1 text-muted-foreground transition-colors duration-200 hover:text-primary"
               >
                 Clear
@@ -204,9 +287,14 @@ function SalonsPage() {
             {SORTS.map((s) => (
               <button
                 key={s.key}
-                onClick={() => { setSort(s.key); setPage(1); }}
+                onClick={() => {
+                  setSort(s.key);
+                  setPage(1);
+                }}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  sort === s.key ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:text-primary"
+                  sort === s.key
+                    ? "bg-primary text-primary-foreground"
+                    : "border border-border text-muted-foreground hover:text-primary"
                 }`}
               >
                 {s.label}
@@ -234,7 +322,11 @@ function SalonsPage() {
             <EmptyState
               icon={Store}
               title="We couldn't load salons"
-              description={error instanceof Error ? error.message : "Please check your connection and try again."}
+              description={
+                error instanceof Error
+                  ? error.message
+                  : "Please check your connection and try again."
+              }
               action={
                 <button
                   onClick={() => void refetch()}
@@ -249,11 +341,13 @@ function SalonsPage() {
               icon={Store}
               title="No salons found for this search"
               description={
-                activeCategory
-                  ? `No salon is offering ${activeCategory.name} services yet. Try another category or area.`
-                  : city
-                    ? `SalonX is coming to ${city} soon. Try another area, search by city, or look for a different service.`
-                    : "Try another area, search by city, or search for a different service or hairstyle."
+                near
+                  ? "No nearby salons have map locations yet. Try searching by city."
+                  : activeCategory
+                    ? `No salon is offering ${activeCategory.name} services yet. Try another category or area.`
+                    : city
+                      ? `SalonX is coming to ${city} soon. Try another area, search by city, or look for a different service.`
+                      : "Try another area, search by city, or search for a different service or hairstyle."
               }
             />
           ) : (
@@ -293,12 +387,22 @@ function SalonsPage() {
   );
 }
 
-function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       onClick={onClick}
       className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
-        active ? "border-primary bg-primary-soft text-primary" : "border-border text-muted-foreground hover:border-primary hover:text-primary"
+        active
+          ? "border-primary bg-primary-soft text-primary"
+          : "border-border text-muted-foreground hover:border-primary hover:text-primary"
       }`}
     >
       {children}
@@ -311,9 +415,21 @@ export function SalonCard({
   near,
 }: {
   salon: {
-    id: string; slug: string | null; name: string; city: string; area: string | null; pin_code: string | null;
-    image_url: string | null; rating: number; review_count: number; starting_price: number;
-    is_verified: boolean; home_service_enabled: boolean; latitude: number | null; longitude: number | null;
+    id: string;
+    slug: string | null;
+    name: string;
+    city: string;
+    area: string | null;
+    pin_code: string | null;
+    address: string | null;
+    image_url: string | null;
+    rating: number;
+    review_count: number;
+    starting_price: number;
+    is_verified: boolean;
+    home_service_enabled: boolean;
+    latitude: number | null;
+    longitude: number | null;
     distance_km?: number | null;
   };
   near?: { lat: number; lng: number } | null;
@@ -324,6 +440,19 @@ export function SalonCard({
   const favorites = useMyFavorites(user?.id);
   const isFav = (favorites.data ?? []).some((f) => f.salon_id === salon.id);
   const km = near && typeof salon.distance_km === "number" ? salon.distance_km : null;
+  const destination =
+    salon.latitude !== null && salon.longitude !== null
+      ? `${salon.latitude},${salon.longitude}`
+      : [salon.address, salon.area, salon.city, salon.pin_code, salon.name]
+          .filter(Boolean)
+          .join(", ");
+  const directionsParams = new URLSearchParams({
+    api: "1",
+    destination,
+    travelmode: "driving",
+  });
+  if (near) directionsParams.set("origin", `${near.lat},${near.lng}`);
+  const directionsUrl = `https://www.google.com/maps/dir/?${directionsParams.toString()}`;
 
   async function toggleFavorite() {
     if (!user) {
@@ -372,26 +501,45 @@ export function SalonCard({
           )}
         </div>
         <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-          {km !== null && <span className="flex items-center gap-1"><MapPin className="size-3" />{t("search.kmAway", { km: km.toFixed(1) })}</span>}
+          {km !== null && (
+            <span className="flex items-center gap-1">
+              <MapPin className="size-3" />
+              {t("search.kmAway", { km: km.toFixed(1) })}
+            </span>
+          )}
           <span className="flex items-center gap-1">
             <Clock className="size-3" />
             {salon.review_count > 0 ? `${salon.review_count} reviews` : "New on SalonX"}
           </span>
           {salon.home_service_enabled && <span className="text-success">Home service</span>}
         </div>
-        <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs font-medium text-foreground">
-            {salon.starting_price > 0 ? `Starting ${formatMoney(salon.starting_price)}` : "Prices coming soon"}
+            {salon.starting_price > 0
+              ? `Starting ${formatMoney(salon.starting_price)}`
+              : "Prices coming soon"}
           </span>
-          {salon.slug && (
-            <Link
-              to="/salons/$slug"
-              params={{ slug: salon.slug }}
-              className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+          <div className="flex items-center gap-2">
+            <a
+              href={directionsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Get directions to ${salon.name} in Google Maps`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:border-primary hover:text-primary"
             >
-              Book Now
-            </Link>
-          )}
+              <Navigation className="size-3.5" />
+              Navigate
+            </a>
+            {salon.slug && (
+              <Link
+                to="/salons/$slug"
+                params={{ slug: salon.slug }}
+                className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Book Now
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     </article>

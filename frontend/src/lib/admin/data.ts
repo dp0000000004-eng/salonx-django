@@ -7,9 +7,9 @@ export function useSuperAdminCount() {
   return useQuery({
     queryKey: ["super_admin_count"],
     queryFn: async () => {
-      const { data, error } = await api.rpc("super_admin_count");
+      const { data, error } = await api.adminStatus();
       if (error) throw error;
-      return (data as number) ?? 0;
+      return data?.super_admin_count ?? 0;
     },
     staleTime: 0,
   });

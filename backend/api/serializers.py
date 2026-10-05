@@ -7,9 +7,23 @@ from rest_framework import serializers
 from .models import *
 
 class UserSerializer(serializers.ModelSerializer):
-    full_name=serializers.CharField(source='profile.full_name',read_only=True)
-    role=serializers.CharField(source='profile.role',read_only=True)
+    full_name=serializers.SerializerMethodField()
+    role=serializers.SerializerMethodField()
     class Meta: model=User; fields=['id','email','username','full_name','role']
+
+    def get_full_name(self, user):
+        try:
+            return user.profile.full_name
+        except Profile.DoesNotExist:
+            return ''
+
+    def get_role(self, user):
+        if user.is_staff:
+            return 'super_admin'
+        try:
+            return user.profile.role
+        except Profile.DoesNotExist:
+            return None
 class _LegacyRegisterSerializer(serializers.Serializer):
     email=serializers.EmailField(); password=serializers.CharField(min_length=8,write_only=True); full_name=serializers.CharField(required=False,allow_blank=True); phone=serializers.CharField(required=False,allow_blank=True); role=serializers.ChoiceField(choices=['customer','owner'],default='customer')
     def create(self, data):
@@ -142,7 +156,10 @@ class LoyaltyTransactionSerializer(serializers.ModelSerializer):
     class Meta: model=LoyaltyTransaction; fields='__all__'; read_only_fields=['id','created_at']
 
 class SubscriptionStatusHistorySerializer(serializers.ModelSerializer):
-    class Meta: model=SubscriptionStatusHistory; fields='__all__'; read_only_fields=['id','created_at']
+    class Meta:
+        model=SubscriptionStatusHistory
+        fields='__all__'
+        read_only_fields=['id','created_at']
 
 class SalonSubscriptionSerializer(serializers.ModelSerializer):
     class Meta: model=SalonSubscription; fields='__all__'; read_only_fields=['id']
