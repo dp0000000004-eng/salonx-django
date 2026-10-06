@@ -586,6 +586,11 @@ const api = {
       pinCode: string;
     }>(`/locations/reverse-geocode/?${params.toString()}`);
   },
+  contactSubscriptionAdmin: async (salonId: string) =>
+    request<{ id: string }>("/subscriptions/contact-admin/", {
+      method: "POST",
+      body: JSON.stringify({ salon_id: salonId }),
+    }),
   rpc: async (name: string, args: Record<string, any> = {}) =>
     request(`/rpc/${encodeURIComponent(name)}/`, { method: "POST", body: JSON.stringify(args) }),
   auth,

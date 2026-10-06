@@ -78,7 +78,10 @@ export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => 
     <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-xs text-destructive">
       <p>{(error as Error)?.message ?? "Something went wrong."}</p>
       {onRetry && (
-        <button onClick={onRetry} className="mt-2 rounded-md border border-destructive/40 px-3 py-1.5">
+        <button
+          onClick={onRetry}
+          className="mt-2 rounded-md border border-destructive/40 px-3 py-1.5"
+        >
           Try again
         </button>
       )}
@@ -110,11 +113,21 @@ export function Modal({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
-      <div className={`max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-card p-5 shadow-xl sm:rounded-2xl ${wide ? "sm:max-w-2xl" : "sm:max-w-md"}`}>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className={`max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-card p-5 shadow-xl sm:rounded-2xl ${wide ? "sm:max-w-2xl" : "sm:max-w-md"}`}
+      >
         <div className="mb-4 flex items-start justify-between gap-4">
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-          <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-muted-foreground hover:bg-muted">
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+          >
             <X className="size-4" />
           </button>
         </div>
@@ -207,7 +220,15 @@ export function ConfirmDialog({
 
 /* ---------------- media ---------------- */
 
-export function MediaImage({ path, alt, className }: { path: string | null; alt: string; className?: string }) {
+export function MediaImage({
+  path,
+  alt,
+  className,
+}: {
+  path: string | null;
+  alt: string;
+  className?: string;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
@@ -236,7 +257,12 @@ export function ImageUploader({
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [preview, setPreview] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState(() => (/^https?:\/\//i.test(value ?? "") ? value! : ""));
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setImageUrl(/^https?:\/\//i.test(value ?? "") ? value! : "");
+  }, [value]);
 
   async function pick(file: File | undefined) {
     if (!file) return;
@@ -245,6 +271,7 @@ export function ImageUploader({
       toast.error(problem);
       return;
     }
+    setImageUrl("");
     setPreview(URL.createObjectURL(file));
     setBusy(true);
     setProgress(20);
@@ -263,13 +290,38 @@ export function ImageUploader({
     }
   }
 
+  function applyImageUrl() {
+    const candidate = imageUrl.trim();
+    if (!candidate) {
+      toast.error("Enter an image URL first.");
+      return;
+    }
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        toast.error("Image URL must start with http:// or https://.");
+        return;
+      }
+      setPreview(null);
+      setImageUrl(parsed.href);
+      onChange(parsed.href);
+      toast.success("Image URL added");
+    } catch {
+      toast.error("Enter a valid image URL.");
+    }
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-3">
         {preview ? (
           <img src={preview} alt="Preview" className="size-16 rounded-lg object-cover" />
         ) : value ? (
-          <MediaImage path={value} alt="Current image" className="size-16 rounded-lg object-cover" />
+          <MediaImage
+            path={value}
+            alt="Current image"
+            className="size-16 rounded-lg object-cover"
+          />
         ) : (
           <span className="flex size-16 items-center justify-center rounded-lg bg-muted text-muted-foreground">
             <Upload className="size-4" />
@@ -284,6 +336,7 @@ export function ImageUploader({
               type="button"
               onClick={() => {
                 setPreview(null);
+                setImageUrl("");
                 onChange(null);
               }}
             >
@@ -294,7 +347,10 @@ export function ImageUploader({
       </div>
       {busy && (
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
+          <div
+            className="h-full rounded-full bg-primary transition-all"
+            style={{ width: `${progress}%` }}
+          />
         </div>
       )}
       <input
@@ -304,6 +360,19 @@ export function ImageUploader({
         className="hidden"
         onChange={(e) => void pick(e.target.files?.[0])}
       />
+      <div className="flex gap-2">
+        <input
+          type="url"
+          value={imageUrl}
+          onChange={(e) => setImageUrl(e.target.value)}
+          placeholder="Or paste an image URL (https://...)"
+          className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none focus:border-primary"
+          aria-label="Image URL"
+        />
+        <GhostButton type="button" onClick={applyImageUrl} disabled={busy}>
+          Use URL
+        </GhostButton>
+      </div>
       <p className="text-[10px] text-muted-foreground">JPG, PNG, WebP or AVIF · up to 5 MB</p>
     </div>
   );
@@ -340,7 +409,11 @@ export function AppointmentDialog({
     setPayNote("");
   }, [booking?.id, booking?.booking_date]);
 
-  const slots = useSlots(salonId, mode === "reschedule" ? newDate : undefined, booking?.duration_min ?? 30);
+  const slots = useSlots(
+    salonId,
+    mode === "reschedule" ? newDate : undefined,
+    booking?.duration_min ?? 30,
+  );
 
   if (!booking) return null;
 
@@ -360,17 +433,32 @@ export function AppointmentDialog({
 
   const actions: { label: string; status: BookingStatus; show: boolean }[] = [
     { label: "Accept", status: "confirmed", show: booking.status === "pending" },
-    { label: "Mark in progress", status: "service_started", show: ["confirmed", "checked_in"].includes(booking.status) },
+    {
+      label: "Mark in progress",
+      status: "service_started",
+      show: ["confirmed", "checked_in"].includes(booking.status),
+    },
     { label: "Check in", status: "checked_in", show: booking.status === "confirmed" },
-    { label: "Mark completed", status: "completed", show: ["confirmed", "checked_in", "service_started"].includes(booking.status) },
-    { label: "Mark no show", status: "no_show", show: ["confirmed", "checked_in", "pending"].includes(booking.status) },
+    {
+      label: "Mark completed",
+      status: "completed",
+      show: ["confirmed", "checked_in", "service_started"].includes(booking.status),
+    },
+    {
+      label: "Mark no show",
+      status: "no_show",
+      show: ["confirmed", "checked_in", "pending"].includes(booking.status),
+    },
   ];
 
   return (
     <Modal open onClose={onClose} title="Appointment details" wide>
       <div className="grid gap-3 sm:grid-cols-2">
         <Detail label="Customer" value={booking.profiles?.full_name ?? "Customer"} />
-        <Detail label="Contact" value={booking.profiles?.phone ?? booking.profiles?.email ?? "Not shared"} />
+        <Detail
+          label="Contact"
+          value={booking.profiles?.phone ?? booking.profiles?.email ?? "Not shared"}
+        />
         <Detail label="Service" value={bookingItemName(booking)} />
         <Detail label="Price" value={formatMoney(booking.amount)} />
         <Detail
@@ -390,9 +478,15 @@ export function AppointmentDialog({
         <Detail label="Payment" value={paymentStatus ? paymentStatus : "No payment record"} />
         <Detail label="Booked on" value={new Date(booking.created_at).toLocaleString("en-IN")} />
       </div>
-      {booking.notes && <p className="mt-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground">{booking.notes}</p>}
+      {booking.notes && (
+        <p className="mt-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground">
+          {booking.notes}
+        </p>
+      )}
       {booking.cancellation_reason && (
-        <p className="mt-3 rounded-lg bg-destructive/10 p-3 text-xs text-destructive">{booking.cancellation_reason}</p>
+        <p className="mt-3 rounded-lg bg-destructive/10 p-3 text-xs text-destructive">
+          {booking.cancellation_reason}
+        </p>
       )}
 
       {mode === "view" && (
@@ -403,7 +497,12 @@ export function AppointmentDialog({
               <PrimaryButton
                 key={a.label}
                 busy={busy}
-                onClick={() => run(() => setBookingStatus(booking.id, a.status), `Appointment ${a.label.toLowerCase()}`)}
+                onClick={() =>
+                  run(
+                    () => setBookingStatus(booking.id, a.status),
+                    `Appointment ${a.label.toLowerCase()}`,
+                  )
+                }
               >
                 {a.label}
               </PrimaryButton>
@@ -437,7 +536,9 @@ export function AppointmentDialog({
             />
           </Field>
           <div>
-            <p className="mb-1 text-[11px] font-medium text-foreground">Available times ({booking.duration_min} min)</p>
+            <p className="mb-1 text-[11px] font-medium text-foreground">
+              Available times ({booking.duration_min} min)
+            </p>
             {slots.isLoading ? (
               <p className="text-xs text-muted-foreground">Checking availability…</p>
             ) : (slots.data ?? []).length === 0 ? (
@@ -451,7 +552,9 @@ export function AppointmentDialog({
                     key={s}
                     onClick={() => setNewTime(s)}
                     className={`rounded-lg border px-2 py-1.5 text-[11px] ${
-                      newTime === s ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground"
+                      newTime === s
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border text-muted-foreground"
                     }`}
                   >
                     {formatTime(s)}
@@ -465,7 +568,12 @@ export function AppointmentDialog({
             <PrimaryButton
               busy={busy}
               disabled={!newTime}
-              onClick={() => run(() => rescheduleBooking(booking.id, newDate, newTime), "Appointment rescheduled")}
+              onClick={() =>
+                run(
+                  () => rescheduleBooking(booking.id, newDate, newTime),
+                  "Appointment rescheduled",
+                )
+              }
             >
               Confirm new time
             </PrimaryButton>
@@ -476,7 +584,12 @@ export function AppointmentDialog({
       {mode === "cancel" && (
         <div className="mt-5 space-y-3">
           <Field label="Reason (shared with the customer)">
-            <textarea className={inputClass} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
+            <textarea
+              className={inputClass}
+              rows={3}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
           </Field>
           <div className="flex justify-end gap-2">
             <GhostButton onClick={() => setMode("view")}>Back</GhostButton>
@@ -484,7 +597,8 @@ export function AppointmentDialog({
               busy={busy}
               onClick={() =>
                 run(
-                  () => setBookingStatus(booking.id, "cancelled", reason || "Cancelled by the salon"),
+                  () =>
+                    setBookingStatus(booking.id, "cancelled", reason || "Cancelled by the salon"),
                   "Appointment cancelled",
                 )
               }
@@ -498,11 +612,15 @@ export function AppointmentDialog({
       {mode === "pay" && (
         <div className="mt-5 space-y-3">
           <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
-            Confirm you have received {formatMoney(booking.amount)} from the customer. Loyalty points are awarded
-            automatically once the payment is confirmed.
+            Confirm you have received {formatMoney(booking.amount)} from the customer. Loyalty
+            points are awarded automatically once the payment is confirmed.
           </p>
           <Field label="How was it paid?">
-            <select className={inputClass} value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
+            <select
+              className={inputClass}
+              value={payMethod}
+              onChange={(e) => setPayMethod(e.target.value)}
+            >
               <option value="cash">Cash</option>
               <option value="upi">UPI</option>
               <option value="card">Card</option>
@@ -510,7 +628,12 @@ export function AppointmentDialog({
             </select>
           </Field>
           <Field label="Note (optional)">
-            <input className={inputClass} value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="Reference, remark…" />
+            <input
+              className={inputClass}
+              value={payNote}
+              onChange={(e) => setPayNote(e.target.value)}
+              placeholder="Reference, remark…"
+            />
           </Field>
           <div className="flex justify-end gap-2">
             <GhostButton onClick={() => setMode("view")}>Back</GhostButton>
