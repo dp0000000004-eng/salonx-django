@@ -18,20 +18,13 @@ from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
-from .throttles import CostumThrottle
+from .throttles import CostumThrottle, LoginRateThrottle, SupportContactThrottle, ApiResourceThrottle
 from .models import *
 from .serializers import *
 from .permissions import IsAdmin, IsOwnerOrAdmin, role
 
 
-class LoginRateThrottle(AnonRateThrottle):
-    scope = 'login'
 
-class SupportContactThrottle(UserRateThrottle):
-    scope = 'support_contact'
-
-class ApiResourceThrottle(UserRateThrottle):
-    scope = 'api_resource'
 
 
 @api_view(['GET'])
@@ -189,6 +182,7 @@ def scoped_queryset(queryset, resource, user):
             data__salon_id__in=[str(salon_id) for salon_id in owned_salons],
         )
     return queryset.none()
+
 
 def query_field_name(model, name):
     name=QUERY_ALIASES.get(name,name)
@@ -1058,7 +1052,12 @@ def booking_create(request):
 
 @api_view(['POST'])
 @permission_classes([IsAdmin])
-def admin_action(request, action): return Response({'ok':True,'action':action,'note':'Use dedicated admin serializers/actions for production changes.'})
+def admin_action(request, action):
+    return Response(
+        {
+            'ok':True,'action':action,'note':'Use dedicated admin serializers/actions for production changes.'
+        }
+    )
 
 
 @api_view(['POST'])

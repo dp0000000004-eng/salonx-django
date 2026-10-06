@@ -50,6 +50,7 @@ export function OwnerServices({ salonId }: { salonId: string }) {
   const [form, setForm] = useState<typeof blank | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [categoryBusy, setCategoryBusy] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const chosenIds = useMemo(() => new Set(chosen.data ?? []), [chosen.data]);
@@ -59,21 +60,46 @@ export function OwnerServices({ salonId }: { salonId: string }) {
   );
 
   async function toggleCategory(categoryId: string, on: boolean) {
-    const { error } = on
-      ? await api.from("salon_categories").insert({ salon_id: salonId, category_id: categoryId })
-      : await api.from("salon_categories").delete().eq("salon_id", salonId).eq("category_id", categoryId);
-    if (error) toast.error(error.message);
-    else await queryClient.invalidateQueries({ queryKey: ["salon_categories", salonId] });
+    if (categoryBusy) return;
+    setCategoryBusy(true);
+    try {
+      const { error } = on
+        ? await api.from("salon_categories").insert({ salon_id: salonId, category_id: categoryId })
+        : await api
+            .from("salon_categories")
+            .delete()
+            .eq("salon_id", salonId)
+            .eq("category_id", categoryId);
+      if (error) throw new Error(error.message);
+      await queryClient.invalidateQueries({ queryKey: ["salon_categories", salonId] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update salon category.");
+      await queryClient.invalidateQueries({ queryKey: ["salon_categories", salonId] });
+    } finally {
+      setCategoryBusy(false);
+    }
   }
 
   async function save() {
     if (!form) return;
-    if (!form.name.trim()) { toast.error("Service name is required."); return; }
-    if (!form.category_id) { toast.error("Choose a category for this service."); return; }
+    if (!form.name.trim()) {
+      toast.error("Service name is required.");
+      return;
+    }
+    if (!form.category_id) {
+      toast.error("Choose a category for this service.");
+      return;
+    }
     const price = Number(form.price);
     const duration = Number(form.duration_min);
-    if (!Number.isFinite(price) || price < 0) { toast.error("Enter a valid price."); return; }
-    if (!Number.isFinite(duration) || duration < 5) { toast.error("Duration must be at least 5 minutes."); return; }
+    if (!Number.isFinite(price) || price < 0) {
+      toast.error("Enter a valid price.");
+      return;
+    }
+    if (!Number.isFinite(duration) || duration < 5) {
+      toast.error("Duration must be at least 5 minutes.");
+      return;
+    }
     const category = (categories.data ?? []).find((c) => c.id === form.category_id);
     setBusy(true);
     try {
@@ -113,13 +139,17 @@ export function OwnerServices({ salonId }: { salonId: string }) {
   }
 
   async function toggle(row: ServiceRow) {
-    const { error } = await api.from("services").update({ is_active: !row.is_active }).eq("id", row.id);
+    const { error } = await api
+      .from("services")
+      .update({ is_active: !row.is_active })
+      .eq("id", row.id);
     if (error) toast.error(error.message);
     else await queryClient.invalidateQueries();
   }
 
   if (services.isLoading) return <Loading label="Loading services…" />;
-  if (services.error) return <ErrorNote error={services.error} onRetry={() => void services.refetch()} />;
+  if (services.error)
+    return <ErrorNote error={services.error} onRetry={() => void services.refetch()} />;
 
   const rows = (services.data ?? []) as unknown as ServiceRow[];
 
@@ -127,28 +157,38 @@ export function OwnerServices({ salonId }: { salonId: string }) {
     <div className="space-y-4">
       <Panel title="Categories you offer" icon={LayoutGrid}>
         <p className="mb-3 text-[11px] text-muted-foreground">
-          Tick the categories your salon works in. Customers browsing a category will find you only when you also add
-          your own services under it — ticking a category never creates services for you.
+          Tick the categories your salon works in. Customers browsing a category will find you only
+          when you also add your own services under it — ticking a category never creates services
+          for you.
         </p>
         {categories.isLoading ? (
           <Loading label="Loading categories…" />
         ) : categories.error ? (
           <ErrorNote error={categories.error} onRetry={() => void categories.refetch()} />
         ) : (categories.data ?? []).length === 0 ? (
-          <Empty title="No categories yet" description="The SalonX team has not published any categories." />
+          <Empty
+            title="No categories yet"
+            description="The SalonX team has not published any categories."
+          />
         ) : (
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {(categories.data ?? []).map((c) => (
-              <label key={c.id} className="flex items-start gap-2 rounded-xl border border-border p-3 text-xs">
+              <label
+                key={c.id}
+                className="flex items-start gap-2 rounded-xl border border-border p-3 text-xs"
+              >
                 <input
                   type="checkbox"
                   className="mt-0.5"
                   checked={chosenIds.has(c.id)}
+                  disabled={categoryBusy}
                   onChange={(e) => void toggleCategory(c.id, e.target.checked)}
                 />
                 <span className="min-w-0">
                   <span className="block font-medium text-foreground">{c.name}</span>
-                  {c.description && <span className="block text-[11px] text-muted-foreground">{c.description}</span>}
+                  {c.description && (
+                    <span className="block text-[11px] text-muted-foreground">{c.description}</span>
+                  )}
                 </span>
               </label>
             ))}
@@ -171,22 +211,35 @@ export function OwnerServices({ salonId }: { salonId: string }) {
         }
       >
         {rows.length === 0 ? (
-          <Empty title="No services yet" description="Add your first service so customers can book it." />
+          <Empty
+            title="No services yet"
+            description="Add your first service so customers can book it."
+          />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {rows.map((s) => (
               <article key={s.id} className="rounded-xl border border-border p-3">
-                <MediaImage path={s.image_url} alt={s.name} className="mb-3 h-28 w-full rounded-lg object-cover" />
+                <MediaImage
+                  path={s.image_url}
+                  alt={s.name}
+                  className="mb-3 h-28 w-full rounded-lg object-cover"
+                />
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <h3 className="truncate text-xs font-semibold text-foreground">{s.name}</h3>
                     <p className="text-[11px] text-muted-foreground">{s.category}</p>
                   </div>
-                  <span className={`rounded-md px-2 py-0.5 text-[10px] ${s.is_active ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>
+                  <span
+                    className={`rounded-md px-2 py-0.5 text-[10px] ${s.is_active ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}
+                  >
                     {s.is_active ? "Active" : "Hidden"}
                   </span>
                 </div>
-                {s.description && <p className="mt-2 line-clamp-2 text-[11px] text-muted-foreground">{s.description}</p>}
+                {s.description && (
+                  <p className="mt-2 line-clamp-2 text-[11px] text-muted-foreground">
+                    {s.description}
+                  </p>
+                )}
                 <p className="mt-2 text-xs font-medium text-foreground">
                   {formatMoney(s.price)} · {s.duration_min} min
                 </p>
@@ -207,7 +260,9 @@ export function OwnerServices({ salonId }: { salonId: string }) {
                   >
                     Edit
                   </GhostButton>
-                  <GhostButton onClick={() => void toggle(s)}>{s.is_active ? "Hide" : "Show"}</GhostButton>
+                  <GhostButton onClick={() => void toggle(s)}>
+                    {s.is_active ? "Hide" : "Show"}
+                  </GhostButton>
                   <GhostButton className="text-destructive" onClick={() => setConfirmId(s.id)}>
                     Delete
                   </GhostButton>
@@ -217,11 +272,19 @@ export function OwnerServices({ salonId }: { salonId: string }) {
           </div>
         )}
 
-        <Modal open={!!form} onClose={() => setForm(null)} title={editId ? "Edit service" : "Add service"}>
+        <Modal
+          open={!!form}
+          onClose={() => setForm(null)}
+          title={editId ? "Edit service" : "Add service"}
+        >
           {form && (
             <div className="space-y-3">
               <Field label="Service name">
-                <input className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <input
+                  className={inputClass}
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
               </Field>
               <Field label="Category">
                 <select
@@ -230,7 +293,10 @@ export function OwnerServices({ salonId }: { salonId: string }) {
                   onChange={(e) => setForm({ ...form, category_id: e.target.value })}
                 >
                   <option value="">Select a category…</option>
-                  {(bookableCategories.length > 0 ? bookableCategories : (categories.data ?? [])).map((c) => (
+                  {(bookableCategories.length > 0
+                    ? bookableCategories
+                    : (categories.data ?? [])
+                  ).map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
@@ -239,25 +305,50 @@ export function OwnerServices({ salonId }: { salonId: string }) {
               </Field>
               {bookableCategories.length === 0 && (
                 <p className="text-[11px] text-muted-foreground">
-                  Tip: tick the categories you offer above so your salon shows up in category browsing.
+                  Tip: tick the categories you offer above so your salon shows up in category
+                  browsing.
                 </p>
               )}
               <Field label="Description">
-                <textarea className={inputClass} rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                <textarea
+                  className={inputClass}
+                  rows={3}
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
               </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Price (₹)">
-                  <input className={inputClass} inputMode="numeric" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+                  <input
+                    className={inputClass}
+                    inputMode="numeric"
+                    value={form.price}
+                    onChange={(e) => setForm({ ...form, price: e.target.value })}
+                  />
                 </Field>
                 <Field label="Duration (minutes)">
-                  <input className={inputClass} inputMode="numeric" value={form.duration_min} onChange={(e) => setForm({ ...form, duration_min: e.target.value })} />
+                  <input
+                    className={inputClass}
+                    inputMode="numeric"
+                    value={form.duration_min}
+                    onChange={(e) => setForm({ ...form, duration_min: e.target.value })}
+                  />
                 </Field>
               </div>
               <Field label="Photo">
-                <ImageUploader salonId={salonId} folder="services" value={form.image_url} onChange={(p) => setForm({ ...form, image_url: p })} />
+                <ImageUploader
+                  salonId={salonId}
+                  folder="services"
+                  value={form.image_url}
+                  onChange={(p) => setForm({ ...form, image_url: p })}
+                />
               </Field>
               <label className="flex items-center gap-2 text-xs text-foreground">
-                <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
+                <input
+                  type="checkbox"
+                  checked={form.is_active}
+                  onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
+                />
                 Visible to customers
               </label>
               <div className="flex justify-end gap-2 pt-2">
