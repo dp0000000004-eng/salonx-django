@@ -16,6 +16,7 @@ from .models import (
     LegacyRecord,
     Notification,
     Profile,
+    Review,
     Salon,
     SalonSubscription,
     Service,
@@ -765,6 +766,50 @@ class SalonCategoryResourceTests(TestCase):
         self.assertEqual(response.status_code, 201, response.json())
 
 
+class SampleServiceSeedTests(TestCase):
+    def setUp(self):
+        Salon.objects.create(
+            name='Sample Salon One',
+            slug='sample-salon-one',
+            status='approved',
+            is_active=True,
+        )
+        Salon.objects.create(
+            name='Sample Salon Two',
+            slug='sample-salon-two',
+            status='approved',
+            is_active=True,
+        )
+        Salon.objects.create(
+            name='Pending Sample Salon',
+            slug='pending-sample-salon',
+            status='pending',
+            is_active=True,
+        )
+
+    def test_seed_creates_sample_services_only_for_approved_salons_and_is_idempotent(self):
+        call_command('seed_sample_services')
+
+        self.assertEqual(Service.objects.count(), 12)
+        self.assertEqual(
+            Service.objects.filter(salon__status='approved', is_active=True).count(),
+            12,
+        )
+        self.assertEqual(
+            Service.objects.filter(salon__status='pending').count(),
+            0,
+        )
+        self.assertTrue(
+            Service.objects.filter(
+                description__contains='Sample service and price for MVP demonstration'
+            ).exists()
+        )
+
+        call_command('seed_sample_services')
+
+        self.assertEqual(Service.objects.count(), 12)
+
+
 class ApiResourceTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -931,6 +976,214 @@ class ApiResourceTests(TestCase):
         response = self.client.get('/api/db/notifications/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual([row['title'] for row in response.json()], ['Customer notice'])
+
+    def test_active_coupons_are_public_to_anonymous_and_authenticated_visitors(self):
+        coupon = LegacyRecord.objects.create(
+            resource='coupons',
+            owner=self.other_customer,
+            data={
+                'code':'PUBLIC10',
+                'description':'Public coupon',
+                'discount_type':'percent',
+                'discount_value':10,
+                'is_active':True,
+            },
+        )
+        url = '/api/db/coupons/?select=id,code,description&is_active=true'
+
+        anonymous_response = self.client.get(url)
+
+        self.assertEqual(anonymous_response.status_code, 200, anonymous_response.json())
+        self.assertEqual(anonymous_response.json()[0]['id'], str(coupon.id))
+        self.assertEqual(anonymous_response.json()[0]['code'], 'PUBLIC10')
+
+        self.client.force_authenticate(self.customer)
+        authenticated_response = self.client.get(url)
+
+        self.assertEqual(authenticated_response.status_code, 200, authenticated_response.json())
+        self.assertEqual(authenticated_response.json()[0]['id'], str(coupon.id))
+
+    def test_support_ticket_create_uses_authenticated_user(self):
+        owned_salon = Salon.objects.create(
+            owner=self.customer,
+            name='Customer Support Salon',
+            slug='customer-support-salon',
+        )
+        self.client.force_authenticate(self.customer)
+
+        response = self.client.post(
+            '/api/db/support_tickets/?select=id&single=1',
+            {
+                'user_id':self.other_customer.id,
+                'subject':'Account support',
+                'description':'Please help with my account.',
+                'salon_id':str(owned_salon.id),
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201, response.json())
+        ticket = SupportTicket.objects.get()
+        self.assertEqual(ticket.user, self.customer)
+        self.assertEqual(ticket.salon, owned_salon)
+        self.assertEqual(response.json()['id'], str(ticket.id))
+
+    def test_customer_can_review_their_completed_booking(self):
+        self.booking.status='completed'
+        self.booking.save(update_fields=['status'])
+        self.client.force_authenticate(self.customer)
+
+        response = self.client.post(
+            '/api/db/reviews/',
+            {
+                'salon':str(self.salon.id),
+                'customer':self.other_customer.id,
+                'booking':str(self.booking.id),
+                'service':str(self.service.id),
+                'rating':5,
+                'comment':'Great service.',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201, response.json())
+        review=Review.objects.get()
+        self.assertEqual(review.customer, self.customer)
+        self.assertEqual(review.salon, self.booking.salon)
+        self.assertEqual(review.service, self.booking.service)
+
+    def test_customer_cannot_review_an_incomplete_booking(self):
+        self.client.force_authenticate(self.customer)
+
+        response = self.client.post(
+            '/api/db/reviews/',
+            {
+                'salon':str(self.salon.id),
+                'booking':str(self.booking.id),
+                'rating':5,
+                'comment':'Too early.',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400, response.json())
+        self.assertEqual(Review.objects.count(), 0)
+
+    def test_customer_cannot_review_another_users_completed_booking(self):
+        other_booking=Booking.objects.get(customer=self.other_customer)
+        other_booking.status='completed'
+        other_booking.save(update_fields=['status'])
+        self.client.force_authenticate(self.customer)
+
+        response = self.client.post(
+            '/api/db/reviews/',
+            {
+                'salon':str(other_booking.salon_id),
+                'booking':str(other_booking.id),
+                'rating':5,
+                'comment':'Not my appointment.',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 403, response.json())
+        self.assertEqual(Review.objects.count(), 0)
+
+    def test_support_ticket_cannot_be_created_for_another_users_salon(self):
+        owner = User.objects.create_user(
+            username='support-owner@example.test',
+            email='support-owner@example.test',
+            password='ValidPass123!',
+        )
+        Profile.objects.create(id=owner, full_name='Salon Owner')
+        owned_salon = Salon.objects.create(
+            owner=owner,
+            name='Support Salon',
+            slug='support-salon',
+        )
+        self.client.force_authenticate(self.customer)
+
+        response = self.client.post(
+            '/api/db/support_tickets/',
+            {
+                'subject':'Salon support',
+                'description':'Please help.',
+                'salon_id':str(owned_salon.id),
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 403, response.json())
+        self.assertEqual(SupportTicket.objects.count(), 0)
+
+    def test_salon_owner_can_read_only_their_subscription_status_history(self):
+        owner = User.objects.create_user(
+            username='history-owner@example.test',
+            email='history-owner@example.test',
+            password='ValidPass123!',
+        )
+        owned_salon = Salon.objects.create(
+            owner=owner,
+            name='Owned History Salon',
+            slug='owned-history-salon',
+        )
+        own_history = SubscriptionStatusHistory.objects.create(
+            salon=owned_salon,
+            status='active',
+            note='Subscription activated',
+        )
+        SubscriptionStatusHistory.objects.create(
+            salon=self.other_salon,
+            status='expired',
+            note='Private history',
+        )
+        self.client.force_authenticate(owner)
+
+        response = self.client.get(
+            '/api/db/subscription_status_history/?'
+            'select=id,status,note,created_at'
+            f'&salon_id={owned_salon.id}&order=-created_at&limit=50'
+        )
+
+        self.assertEqual(response.status_code, 200, response.json())
+        self.assertEqual(
+            [row['id'] for row in response.json()],
+            [str(own_history.id)],
+        )
+
+    def test_non_owner_cannot_read_subscription_status_history(self):
+        SubscriptionStatusHistory.objects.create(
+            salon=self.salon,
+            status='active',
+            note='Private history',
+        )
+        self.client.force_authenticate(self.customer)
+
+        response = self.client.get('/api/db/subscription_status_history/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_salon_owner_cannot_write_subscription_status_history(self):
+        owner = User.objects.create_user(
+            username='history-writer@example.test',
+            email='history-writer@example.test',
+            password='ValidPass123!',
+        )
+        Salon.objects.create(
+            owner=owner,
+            name='History Writer Salon',
+            slug='history-writer-salon',
+        )
+        self.client.force_authenticate(owner)
+
+        response = self.client.post(
+            '/api/db/subscription_status_history/',
+            {'salon':str(Salon.objects.get(owner=owner).id),'status':'active'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 403)
 
     def test_bookings_are_scoped_and_booking_serializer_works(self):
         self.client.force_authenticate(self.customer)

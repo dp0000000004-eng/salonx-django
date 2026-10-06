@@ -58,6 +58,9 @@ class ServiceCategory(models.Model):
 class Service(models.Model):
     id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); salon=models.ForeignKey(Salon,on_delete=models.CASCADE,related_name='services'); category=models.ForeignKey(ServiceCategory,null=True,blank=True,on_delete=models.SET_NULL)
     name=models.CharField(max_length=160); description=models.TextField(blank=True); image_url=models.URLField(blank=True); price=models.DecimalField(max_digits=10,decimal_places=2); duration_minutes=models.PositiveIntegerField(default=30); is_active=models.BooleanField(default=True); created_at=models.DateTimeField(auto_now_add=True); updated_at=models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
 class Hairstyle(models.Model):
     id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False); salon=models.ForeignKey(Salon,null=True,blank=True,on_delete=models.CASCADE,related_name='hairstyles'); name=models.CharField(max_length=160); category=models.CharField(max_length=120,blank=True); image_url=models.URLField(blank=True); price=models.DecimalField(max_digits=10,decimal_places=2,default=0); duration_minutes=models.PositiveIntegerField(default=30); description=models.TextField(blank=True); gender=models.CharField(max_length=40,default='unisex'); is_bookable=models.BooleanField(default=True); is_active=models.BooleanField(default=True); is_featured=models.BooleanField(default=False); created_at=models.DateTimeField(auto_now_add=True)
 class WeddingPackage(models.Model):

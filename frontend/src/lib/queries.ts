@@ -498,13 +498,35 @@ export function useOffers() {
       const { data, error } = await api
         .from("coupons")
         .select(
-          "id, code, description, discount_type, discount_value, min_amount, max_discount, expires_at, banner_url, salon_id, is_featured",
+          "id, code, title, description, discount_type, discount_value, min_amount, max_discount, starts_at, expires_at, banner_url, salon, is_featured",
         )
         .eq("is_active", true)
         .order("is_featured", { ascending: false })
         .order("discount_value", { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      const now = Date.now();
+      const activeOffers = (data ?? []).filter(
+        (offer) =>
+          (!offer.starts_at || new Date(offer.starts_at).getTime() <= now) &&
+          (!offer.expires_at || new Date(offer.expires_at).getTime() >= now),
+      );
+      const salonIds = [...new Set(activeOffers.map((offer) => offer.salon_id).filter(Boolean))];
+      if (salonIds.length === 0) return [];
+
+      const { data: salons, error: salonError } = await api
+        .from("salons")
+        .select("id, slug, name")
+        .in("id", salonIds)
+        .eq("status", "approved")
+        .eq("is_active", true);
+      if (salonError) throw salonError;
+
+      const salonsById = new Map((salons ?? []).map((salon) => [salon.id, salon]));
+      return activeOffers.flatMap((offer) => {
+        if (!offer.salon_id) return [];
+        const salon = salonsById.get(offer.salon_id);
+        return salon ? [{ ...offer, salon }] : [];
+      });
     },
   });
 }

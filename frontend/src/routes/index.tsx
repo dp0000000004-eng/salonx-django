@@ -1,6 +1,6 @@
 import { useT } from "@/lib/i18n";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   Brush,
@@ -55,7 +55,8 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "SalonX — Find the Best Salons Near You & Book Online" },
       {
         property: "og:description",
-        content: "Salon discovery, hairstyle inspiration and instant appointment booking across India.",
+        content:
+          "Salon discovery, hairstyle inspiration and instant appointment booking across India.",
       },
     ],
   }),
@@ -63,7 +64,15 @@ export const Route = createFileRoute("/")({
 });
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  Scissors, Brush, Droplets, Sparkles, Palette, Waves, Wand2, Heart, Grid2x2,
+  Scissors,
+  Brush,
+  Droplets,
+  Sparkles,
+  Palette,
+  Waves,
+  Wand2,
+  Heart,
+  Grid2x2,
 };
 
 const features = [
@@ -71,7 +80,11 @@ const features = [
   { icon: Calendar, title: "Easy Booking", desc: "Book your favourite salon in seconds" },
   { icon: Sparkles, title: "Style Inspiration", desc: "Browse hairstyles offered near you" },
   { icon: Crown, title: "Wedding Packages", desc: "Special packages for groom & bride" },
-  { icon: Wallet, title: "Pay at the Salon", desc: "Pay by cash, UPI or card — the salon confirms it" },
+  {
+    icon: Wallet,
+    title: "Pay at the Salon",
+    desc: "Pay by cash, UPI or card — the salon confirms it",
+  },
   { icon: Headphones, title: "24/7 Support", desc: "We're here to help you anytime" },
 ];
 
@@ -86,6 +99,16 @@ function Home() {
   const [tab, setTab] = useState(0);
   const t = useT();
   const [query, setQuery] = useState("");
+  const [homeLocation, setHomeLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => setHomeLocation({ lat: coords.latitude, lng: coords.longitude }),
+      () => setHomeLocation(null),
+      { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 },
+    );
+  }, []);
 
   const categories = useServiceCategories();
   const categoryCounts = useCategorySalonCounts();
@@ -98,7 +121,15 @@ function Home() {
   const verifiedSalons = useSalons({ verifiedOnly: true, sort: "recommended", pageSize: 4 });
 
   useRealtime(
-    ["salons", "platform_settings", "services", "hairstyles", "service_categories", "hairstyle_catalog", "reviews"],
+    [
+      "salons",
+      "platform_settings",
+      "services",
+      "hairstyles",
+      "service_categories",
+      "hairstyle_catalog",
+      "reviews",
+    ],
     [
       ["salons"],
       ["cities"],
@@ -150,19 +181,29 @@ function Home() {
               className="sx-enter mt-8 max-w-2xl rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm"
               style={{ "--sx-delay": "160ms" } as React.CSSProperties}
             >
-
               <div className="flex flex-wrap gap-6">
                 {tabs.map((tb, i) => (
                   <button
                     key={tb.label}
-                    onClick={() => { if (i === 1) { void navigate({ to: "/salons", search: { q: "", service: "", city: "", category: "", near: "1" } }); return; } setTab(i); }}
+                    onClick={() => {
+                      if (i === 1) {
+                        void navigate({
+                          to: "/salons",
+                          search: { q: "", service: "", city: "", category: "", near: "1" },
+                        });
+                        return;
+                      }
+                      setTab(i);
+                    }}
                     className={`relative flex items-center gap-2 pb-2 text-sm transition-colors ${
                       tab === i ? "font-medium text-white" : "text-white/60 hover:text-white/90"
                     }`}
                   >
                     <tb.icon className={`size-4 ${tab === i ? "text-primary" : ""}`} />
                     {t(tb.label)}
-                    {tab === i && <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-primary" />}
+                    {tab === i && (
+                      <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-primary" />
+                    )}
                   </button>
                 ))}
               </div>
@@ -171,7 +212,10 @@ function Home() {
                 className="mt-3 flex overflow-hidden rounded-lg border border-transparent bg-card transition-[border-color,box-shadow] duration-200 focus-within:border-primary/60 focus-within:shadow-[0_2px_10px_-4px_oklch(0.45_0.18_288/0.4)]"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  void navigate({ to: "/salons", search: { q: query.trim(), city: "", service: "", category: "" } });
+                  void navigate({
+                    to: "/salons",
+                    search: { q: query.trim(), city: "", service: "", category: "" },
+                  });
                 }}
               >
                 <span className="flex items-center pl-4 text-muted-foreground">
@@ -204,7 +248,6 @@ function Home() {
               )}
             </div>
           </div>
-
 
           {/* WEDDING CARD */}
           <div
@@ -239,25 +282,33 @@ function Home() {
         </div>
       </section>
 
-
       {/* SERVICE CATEGORIES — always from the database, never hard-coded */}
-      <section className={`relative z-20 mx-auto -mt-24 max-w-[1500px] px-4 lg:px-8 ${hp.show_categories ? "" : "hidden"}`}>
+      <section
+        className={`relative z-20 mx-auto -mt-24 max-w-[1500px] px-4 lg:px-8 ${hp.show_categories ? "" : "hidden"}`}
+      >
         <div className="salonx-card p-6 sm:p-7">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="text-xl font-bold tracking-tight text-foreground">Service Categories</h2>
+              <h2 className="text-xl font-bold tracking-tight text-foreground">
+                Service Categories
+              </h2>
               <p className="mt-1 text-xs text-muted-foreground">
                 Pick a category to see salons that actually offer those services near you.
               </p>
             </div>
-            <Link to="/services" className="sx-tap flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+            <Link
+              to="/services"
+              className="sx-tap flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+            >
               All services <ArrowRight className="size-4" />
             </Link>
-
           </div>
 
           {categories.isLoading ? (
-            <LoadingGrid count={8} className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8" />
+            <LoadingGrid
+              count={8}
+              className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8"
+            />
           ) : categories.isError ? (
             <div className="mt-5">
               <EmptyState
@@ -316,16 +367,23 @@ function Home() {
                 );
               })}
             </div>
-
           )}
         </div>
       </section>
 
       {/* HAIRSTYLES: only labelled "Trending" when real activity backs it up */}
-      <section className={`mx-auto max-w-[1500px] px-4 lg:px-8 ${!hp.show_hairstyles || ((catalog.data ?? []).length === 0 && !catalog.isLoading) ? "hidden" : "mt-12"}`}>
-        <SectionHead title={trendingReady ? "Trending Hairstyles" : "Editor's Picks"} to="/hairstyles" />
+      <section
+        className={`mx-auto max-w-[1500px] px-4 lg:px-8 ${!hp.show_hairstyles || ((catalog.data ?? []).length === 0 && !catalog.isLoading) ? "hidden" : "mt-12"}`}
+      >
+        <SectionHead
+          title={trendingReady ? "Trending Hairstyles" : "Editor's Picks"}
+          to="/hairstyles"
+        />
         {catalog.isLoading ? (
-          <LoadingGrid count={6} className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6" />
+          <LoadingGrid
+            count={6}
+            className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6"
+          />
         ) : (
           <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
             {(catalog.data ?? []).map((h, i) => {
@@ -350,7 +408,9 @@ function Home() {
                         {stat?.from ? `Starting ${formatMoney(stat.from)}` : "Coming soon"}
                       </p>
                       <p className="text-[10px] text-white/55">
-                        {stat?.salons ? `${stat.salons} ${stat.salons === 1 ? "salon" : "salons"}` : "No salons yet"}
+                        {stat?.salons
+                          ? `${stat.salons} ${stat.salons === 1 ? "salon" : "salons"}`
+                          : "No salons yet"}
                       </p>
                     </div>
                   </Link>
@@ -358,12 +418,14 @@ function Home() {
               );
             })}
           </div>
-
         )}
       </section>
 
       {/* TOP RATED SALONS — ranked on real ratings and review counts */}
-      <Reveal as="section" className={`mx-auto mt-12 max-w-[1500px] px-4 lg:px-8 ${hp.show_top_rated ? "" : "hidden"}`}>
+      <Reveal
+        as="section"
+        className={`mx-auto mt-12 max-w-[1500px] px-4 lg:px-8 ${hp.show_top_rated ? "" : "hidden"}`}
+      >
         <SectionHead title={t("home.topRated")} to="/salons" />
         <div className="mt-4">
           {topSalons.isLoading ? (
@@ -388,10 +450,12 @@ function Home() {
               title="No salons available yet"
               description="Book a demo to get your salon listed on SalonX."
               action={
-                <Link to="/book-demo" className="sx-tap rounded-lg bg-primary px-4 py-2 text-xs font-medium text-primary-foreground">
+                <Link
+                  to="/book-demo"
+                  className="sx-tap rounded-lg bg-primary px-4 py-2 text-xs font-medium text-primary-foreground"
+                >
                   Book a demo
                 </Link>
-
               }
             />
           ) : (
@@ -401,7 +465,7 @@ function Home() {
                   .filter((s) => s.review_count > 0)
                   .map((s, i) => (
                     <Reveal key={s.id} delay={stagger(i, 50, 200)} className="h-full">
-                      <SalonCard salon={s} />
+                      <SalonCard salon={s} near={homeLocation} />
                     </Reveal>
                   ))}
               </div>
@@ -416,7 +480,7 @@ function Home() {
                       .filter((s) => s.review_count === 0)
                       .map((s, i) => (
                         <Reveal key={s.id} delay={stagger(i, 50, 200)} className="h-full">
-                          <SalonCard salon={s} />
+                          <SalonCard salon={s} near={homeLocation} />
                         </Reveal>
                       ))}
                   </div>
@@ -427,7 +491,6 @@ function Home() {
         </div>
       </Reveal>
 
-
       {/* TRUSTED / VERIFIED SALONS */}
       {hp.show_trusted && (verifiedSalons.data?.rows ?? []).length > 0 && (
         <Reveal as="section" className="mx-auto mt-12 max-w-[1500px] px-4 lg:px-8">
@@ -436,7 +499,9 @@ function Home() {
               <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-foreground">
                 <ShieldCheck className="size-5 text-primary" /> Trusted & Verified Salons
               </h2>
-              <p className="mt-1 text-xs text-muted-foreground">Verified by the SalonX team before going live.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Verified by the SalonX team before going live.
+              </p>
             </div>
             <Link
               to="/salons"
@@ -449,7 +514,7 @@ function Home() {
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {(verifiedSalons.data?.rows ?? []).map((s, i) => (
               <Reveal key={s.id} delay={stagger(i, 50, 200)} className="h-full">
-                <SalonCard salon={s} />
+                <SalonCard salon={s} near={homeLocation} />
               </Reveal>
             ))}
           </div>
@@ -458,7 +523,6 @@ function Home() {
 
       {/* WHY CHOOSE SALONX */}
       <Reveal as="section" className="mx-auto mt-12 max-w-[1500px] px-4 lg:px-8">
-
         <div className="grid gap-6 rounded-xl bg-primary-soft/60 p-8 sm:grid-cols-2 lg:grid-cols-6">
           {features.map((f) => (
             <div key={f.title} className="flex gap-3">
@@ -478,7 +542,9 @@ function Home() {
       <Reveal as="section" className="mx-auto mt-12 mb-14 max-w-[1500px] px-4 lg:px-8">
         <div className="salonx-card grid gap-6 p-7 md:grid-cols-3">
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-foreground">Secure Booking Information</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">
+              Secure Booking Information
+            </h2>
             <p className="mt-2 text-xs text-muted-foreground">
               Your booking details are stored securely and only shared with the salon you booked.
             </p>
@@ -486,15 +552,15 @@ function Home() {
           <div>
             <h3 className="text-sm font-semibold text-foreground">How payment works</h3>
             <p className="mt-2 text-xs text-muted-foreground">
-              Every booking starts as payment pending. You pay the salon directly by cash, UPI or card, and the salon
-              marks it paid. SalonX never asks for your card details online.
+              Every booking starts as payment pending. You pay the salon directly by cash, UPI or
+              card, and the salon marks it paid. SalonX never asks for your card details online.
             </p>
           </div>
           <div>
             <h3 className="text-sm font-semibold text-foreground">Loyalty points</h3>
             <p className="mt-2 text-xs text-muted-foreground">
-              Once the salon confirms your payment, loyalty points are added to your balance for that salon and can be
-              redeemed on your next visit there.
+              Once the salon confirms your payment, loyalty points are added to your balance for
+              that salon and can be redeemed on your next visit there.
             </p>
           </div>
         </div>

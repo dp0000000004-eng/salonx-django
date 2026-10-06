@@ -459,6 +459,7 @@ function TicketDetail({
 }
 
 function SubscriptionContext({ salonId, salonName }: { salonId: string; salonName: string }) {
+  const queryClient = useQueryClient();
   const sub = useSalonSubscription(salonId);
   const [days, setDays] = useState(30);
   const [busy, setBusy] = useState(false);

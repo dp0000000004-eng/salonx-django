@@ -134,7 +134,7 @@ MODEL_MAP={
  'subscription_status_history':(SubscriptionStatusHistory,SubscriptionStatusHistorySerializer),
  'salon_subscriptions':(SalonSubscription,SalonSubscriptionSerializer), 'legacy':(LegacyRecord,LegacyRecordSerializer),
 }
-PUBLIC={'salons','service_categories','services','hairstyles','hairstyle_catalog','wedding_packages','locations','subscription_plans','app_features'}
+PUBLIC={'salons','service_categories','services','hairstyles','hairstyle_catalog','wedding_packages','locations','subscription_plans','app_features','coupons'}
 ADMIN_ONLY={'service_categories','locations','subscription_plans','app_features','payment_gateway_settings'}
 SENSITIVE={'contact_messages','demo_requests','payment_gateway_settings','subscription_status_history'}
 QUERY_ALIASES={
@@ -168,6 +168,8 @@ def scoped_queryset(queryset, resource, user):
         return queryset.filter(user_id=user_id)
     if resource in {'loyalty_transactions','reviews'}:
         return queryset.filter(Q(customer_id=user_id)|Q(salon__owner_id=user_id))
+    if resource=='subscription_status_history':
+        return queryset.filter(salon__owner_id=user_id)
     if resource in {'subscriptions','salon_subscriptions'}:
         return queryset.filter(salon__owner_id=user_id)
     if resource in {'subscription_plans','app_features','service_categories','locations'}:
@@ -324,7 +326,11 @@ def db_resource(request, resource):
     Model,Ser = (LegacyRecord,LegacyRecordSerializer) if is_legacy else MODEL_MAP[resource]
     if is_legacy:
         qs=Model.objects.filter(resource=resource)
-        if request.user.is_authenticated and not (request.user.is_staff or role(request.user)=='super_admin'):
+        if (
+            request.user.is_authenticated
+            and not (request.user.is_staff or role(request.user)=='super_admin')
+            and not (resource=='coupons' and request.method=='GET')
+        ):
             qs=qs.filter(owner=request.user)
         if request.method=='GET':
             rows=[]
@@ -339,7 +345,19 @@ def db_resource(request, resource):
                         if str(v).strip('%').lower() not in str(row.get(k[:-7],'')).lower(): ok=False
                     elif k.endswith('__gte') and str(row.get(k[:-5],'')) < str(v): ok=False
                     elif k.endswith('__lte') and str(row.get(k[:-5],'')) > str(v): ok=False
-                    elif k in row and str(row.get(k)) != str(v): ok=False
+                    elif k in row:
+                        row_value=row.get(k)
+                        if isinstance(row_value,bool):
+                            requested=str(v).lower()
+                            if requested in {'true','1','yes','on'}:
+                                matches=True
+                            elif requested in {'false','0','no','off'}:
+                                matches=False
+                            else:
+                                matches=None
+                            if matches is None or row_value!=matches: ok=False
+                        elif str(row_value)!=str(v):
+                            ok=False
                 if ok: rows.append(row)
             order=request.query_params.get('order','-created_at')
             for key in reversed(order.split(',')):
@@ -418,7 +436,9 @@ def db_resource(request, resource):
             pass
         elif request.method!='GET':
             return Response({'error':'Forbidden'},status=403)
-        elif resource in SENSITIVE:
+        elif resource in SENSITIVE and not (
+            request.method=='GET' and resource=='subscription_status_history'
+        ):
             return Response({'error':'Forbidden'},status=403)
     qs=scoped_queryset(Model.objects.all(),resource,request.user)
     if request.method=='GET' and not request.user.is_authenticated:
@@ -491,6 +511,8 @@ def db_resource(request, resource):
         if resource=='bookings' and not is_admin_user(request.user):
             return Response({'error':'Create bookings through the validated booking endpoint'},status=403)
         data=request.data.copy()
+        if resource=='support_tickets' and 'salon_id' in data and 'salon' not in data:
+            data['salon']=data.pop('salon_id')
         if 'pin_code' in data and 'pincode' not in data: data['pincode']=data.pop('pin_code')
         if resource=='profiles': data['id']=request.user.id
         if resource in {'bookings'}: data['customer']=request.user.id
@@ -525,7 +547,29 @@ def db_resource(request, resource):
                 serializer.is_valid(raise_exception=True)
                 obj=serializer.save()
                 return Response(Ser(obj).data)
-        s=Ser(data=data); s.is_valid(raise_exception=True); obj=s.save(); return Response(Ser(obj).data,status=201)
+        s=Ser(data=data)
+        s.is_valid(raise_exception=True)
+        if resource=='reviews':
+            booking=s.validated_data['booking']
+            if booking.customer_id!=request.user.id:
+                return Response({'error':'You may only review your own appointment.'},status=403)
+            if booking.status!='completed':
+                return Response({'error':'Only completed appointments can be reviewed.'},status=400)
+            if Review.objects.filter(booking=booking).exists():
+                return Response({'error':'This appointment has already been reviewed.'},status=400)
+            obj=s.save(
+                customer=request.user,
+                salon=booking.salon,
+                service=booking.service,
+            )
+        elif resource=='support_tickets':
+            salon=s.validated_data.get('salon')
+            if salon and not is_admin_user(request.user) and salon.owner_id!=request.user.id:
+                return Response({'error':'You may only create support tickets for your own salon.'},status=403)
+            obj=s.save(user=request.user)
+        else:
+            obj=s.save()
+        return Response(Ser(obj).data,status=201)
     obj_id=request.query_params.get('id') or request.data.get('id')
     if not obj_id: return Response({'error':'id is required'},status=400)
     obj=scoped_queryset(Model.objects.all(),resource,request.user).filter(pk=obj_id).first()
