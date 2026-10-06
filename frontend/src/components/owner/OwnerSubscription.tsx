@@ -1,9 +1,8 @@
-import { useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { api } from "@/lib/api-client";
 import { toast } from "sonner";
 import { CreditCard } from "lucide-react";
 import { ErrorNote, Loading } from "@/components/owner/shared";
+import { usePlatformContact, waLink } from "@/lib/contact";
 import {
   daysLeft,
   isUnlocked,
@@ -44,7 +43,7 @@ export function OwnerSubscription({ salonId }: { salonId: string }) {
   const sub = useSalonSubscription(salonId);
   const history = useSubscriptionHistory(salonId);
   const { user } = useAuth();
-  const [contactingAdmin, setContactingAdmin] = useState(false);
+  const platformContact = usePlatformContact();
 
   if (sub.isPending || plan.isPending) return <Loading label="Loading your subscription…" />;
   if (sub.isError) return <ErrorNote error={sub.error} onRetry={() => void sub.refetch()} />;
@@ -68,23 +67,32 @@ export function OwnerSubscription({ salonId }: { salonId: string }) {
               ? "Expired"
               : state;
 
-  // Display-only until online subscription payments are connected.
-  function subscribeSoon() {
-    toast.info("Online subscription will be available soon. Use Contact Admin for help meanwhile.");
-  }
-
-  async function contactAdmin() {
-    if (!user || contactingAdmin) return;
-    setContactingAdmin(true);
-    try {
-      const { error } = await api.contactSubscriptionAdmin(salonId);
-      if (error) throw new Error(error.message);
-      toast.success("Message sent to SalonX. You can follow it under Support.");
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setContactingAdmin(false);
+  function requestSubscriptionHelp(
+    request: "start trial" | "renew subscription" | "subscription help",
+  ) {
+    if (platformContact.isPending) {
+      toast.error("Admin contact details are still loading. Please try again shortly.");
+      return;
     }
+    if (platformContact.isError) {
+      toast.error("Could not load the admin WhatsApp contact. Please try again later.");
+      return;
+    }
+    const whatsapp = waLink(platformContact.data?.whatsapp);
+    if (!whatsapp) {
+      toast.error("Admin WhatsApp is not configured. Please contact SalonX support.");
+      return;
+    }
+    const message = [
+      `Hello SalonX, I need help to ${request}.`,
+      `Salon ID: ${salonId}`,
+      `Account: ${user?.email ?? "Salon owner"}`,
+      `Current subscription status: ${state}`,
+      `Plan: ${p?.name ?? "All-in-One Unlimited"}`,
+      `Expiry: ${dateLabel(sub.data?.expires_at)}`,
+      "Online payments are not available in SalonX yet. Please let me know how to complete this request.",
+    ].join("\n");
+    window.open(`${whatsapp}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -98,17 +106,16 @@ export function OwnerSubscription({ salonId }: { salonId: string }) {
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <button
-              onClick={subscribeSoon}
+              onClick={() => requestSubscriptionHelp("renew subscription")}
               className="rounded-lg bg-primary px-4 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90"
             >
-              Renew Subscription
+              Renew via WhatsApp
             </button>
             <button
-              onClick={() => void contactAdmin()}
-              disabled={contactingAdmin}
-              className="rounded-lg border border-border px-4 py-2 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-wait disabled:opacity-60"
+              onClick={() => requestSubscriptionHelp("subscription help")}
+              className="rounded-lg border border-border px-4 py-2 text-xs font-medium text-foreground hover:bg-muted"
             >
-              {contactingAdmin ? "Sending…" : "Contact Admin"}
+              Contact Admin on WhatsApp
             </button>
           </div>
         </div>
@@ -174,26 +181,25 @@ export function OwnerSubscription({ salonId }: { salonId: string }) {
         <div className="mt-5 flex flex-wrap gap-2">
           {state === "none" && (
             <button
-              onClick={subscribeSoon}
+              onClick={() => requestSubscriptionHelp("start trial")}
               className="rounded-lg bg-primary px-4 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90"
             >
-              Start Free Trial
+              Request Trial on WhatsApp
             </button>
           )}
           {state !== "none" && (
             <button
-              onClick={subscribeSoon}
+              onClick={() => requestSubscriptionHelp("renew subscription")}
               className="rounded-lg bg-primary px-4 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90"
             >
-              Renew Subscription
+              Renew via WhatsApp
             </button>
           )}
           <button
-            onClick={() => void contactAdmin()}
-            disabled={contactingAdmin}
-            className="rounded-lg border border-border px-4 py-2 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-wait disabled:opacity-60"
+            onClick={() => requestSubscriptionHelp("subscription help")}
+            className="rounded-lg border border-border px-4 py-2 text-xs font-medium text-foreground hover:bg-muted"
           >
-            {contactingAdmin ? "Sending…" : "Contact Admin"}
+            Contact Admin on WhatsApp
           </button>
         </div>
       </div>
